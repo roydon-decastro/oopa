@@ -4,14 +4,20 @@ import { useActionState, useState } from "react";
 import type { Property } from "@/db/schema";
 import type { FormState } from "@/app/dashboard/actions";
 import { AMENITIES, FURNISHING, PROPERTY_TYPES, PROVINCES } from "@/lib/ph";
+import UtilityFields from "./UtilityFields";
+import type { Utility } from "@/lib/utilities";
 
 type Props = {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
   initial?: Property;
   existingPhotoCount?: number;
+  /** Set when editing a unit inside a building: title and address come from the building. */
+  buildingName?: string;
+  /** For units: the building's utility terms, shown on the "Same as building" option. */
+  buildingUtilities?: Record<Utility, string | null>;
 };
 
-export default function PropertyForm({ action, initial, existingPhotoCount = 0 }: Props) {
+export default function PropertyForm({ action, initial, existingPhotoCount = 0, buildingName, buildingUtilities }: Props) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [previews, setPreviews] = useState<string[]>([]);
   const p = initial;
@@ -19,10 +25,21 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0 }
   return (
     <form action={formAction} className="space-y-8">
       <Section title="Basics">
-        <Field label="Listing title" className="sm:col-span-2">
-          <input className="input" name="title" required minLength={5} maxLength={120}
-            defaultValue={p?.title} placeholder="e.g. Fully furnished 1BR condo near BGC" />
-        </Field>
+        {buildingName ? (
+          <>
+            <Field label="Unit number">
+              <input className="input" name="unitLabel" required maxLength={20} defaultValue={p?.unitLabel ?? ""} />
+            </Field>
+            <Field label="Floor">
+              <input className="input" name="floor" type="number" min={1} max={200} required defaultValue={p?.floor ?? 1} />
+            </Field>
+          </>
+        ) : (
+          <Field label="Listing title" className="sm:col-span-2">
+            <input className="input" name="title" required minLength={5} maxLength={120}
+              defaultValue={p?.title} placeholder="e.g. Fully furnished 1BR condo near BGC" />
+          </Field>
+        )}
         <Field label="Property type">
           <select className="input" name="type" defaultValue={p?.type ?? "condo"}>
             {PROPERTY_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -36,7 +53,7 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0 }
         </Field>
         <Field label="Description" className="sm:col-span-2">
           <textarea className="input min-h-32" name="description" maxLength={5000} defaultValue={p?.description}
-            placeholder="Describe the unit, the building, nearby malls, schools and transport…" />
+            placeholder={buildingName ? "Anything specific to this unit, e.g. corner unit, balcony, street view…" : "Describe the unit, the building, nearby malls, schools and transport…"} />
         </Field>
       </Section>
 
@@ -75,7 +92,7 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0 }
         </Field>
       </Section>
 
-      <Section title="Location">
+      {!buildingName && <Section title="Location">
         <Field label="Street / building / unit" className="sm:col-span-2">
           <input className="input" name="street" defaultValue={p?.street ?? ""} placeholder="e.g. Unit 12B, One Serendra, 11th Ave" />
         </Field>
@@ -89,9 +106,9 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0 }
           <input className="input" name="province" required list="provinces" defaultValue={p?.province ?? ""} placeholder="e.g. Metro Manila" />
           <datalist id="provinces">{PROVINCES.map((x) => <option key={x} value={x} />)}</datalist>
         </Field>
-      </Section>
+      </Section>}
 
-      <Section title="Amenities">
+      <Section title={buildingName ? "Unit amenities (building amenities are added automatically)" : "Amenities"}>
         <div className="grid grid-cols-2 gap-2 sm:col-span-2 sm:grid-cols-3">
           {AMENITIES.map((a) => (
             <label key={a} className="flex items-center gap-2 text-sm">
@@ -101,6 +118,8 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0 }
           ))}
         </div>
       </Section>
+
+      <UtilityFields mode={buildingName ? "unit" : "property"} initial={p} buildingSummary={buildingUtilities} />
 
       <Section title={existingPhotoCount ? "Add more photos" : "Photos"}>
         <div className="sm:col-span-2">

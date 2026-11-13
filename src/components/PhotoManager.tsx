@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deletePhotos } from "@/app/dashboard/actions";
 
-export default function PhotoManager({ propertyId, photos }: { propertyId: string; photos: { id: string; url: string }[] }) {
+export default function PhotoManager({ photos, onDelete }: { photos: { id: string; url: string }[]; onDelete: (ids: string[]) => Promise<void> }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [pending, start] = useTransition();
   const toggle = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
@@ -23,7 +22,7 @@ export default function PhotoManager({ propertyId, photos }: { propertyId: strin
       </div>
       {selected.length > 0 && (
         <button type="button" disabled={pending} className="mt-3 text-sm font-medium text-red-700 hover:underline"
-          onClick={() => start(async () => { await deletePhotos(propertyId, selected); setSelected([]); })}>
+          onClick={() => start(async () => { await onDelete(selected); setSelected([]); })}>
           {pending ? "Removing…" : `Remove ${selected.length} selected photo${selected.length > 1 ? "s" : ""}`}
         </button>
       )}

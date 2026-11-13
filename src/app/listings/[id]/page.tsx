@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { db } from "@/db";
-import { application, property, propertyPhoto } from "@/db/schema";
+import { application, buildingPhoto, property, propertyPhoto } from "@/db/schema";
 import { getSession } from "@/lib/session";
 import { formatPHP } from "@/lib/format";
 import { FURNISHING, PROPERTY_TYPES } from "@/lib/ph";
 import ApplyForm from "@/components/ApplyForm";
 import { applyToProperty } from "@/app/applications/actions";
+import { describeTerms, effectiveTerms } from "@/lib/utilities";
 
 const typeLabel = Object.fromEntries(PROPERTY_TYPES) as Record<string, string>;
 const furnishingLabel = Object.fromEntries(FURNISHING) as Record<string, string>;
@@ -21,6 +22,7 @@ async function load(id: string) {
     with: {
       photos: { orderBy: asc(propertyPhoto.position) },
       owner: { columns: { name: true, createdAt: true } },
+      building: { with: { photos: { orderBy: asc(buildingPhoto.position) } } },
     },
   });
 }
@@ -31,7 +33,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: `${p.title} · ${formatPHP(p.monthlyRentPhp)}/mo · Oopa`,
     description: p.description.slice(0, 160),
-    openGraph: { images: p.photos[0] ? [p.photos[0].url] : [] },
+    openGraph: { images: [...p.photos, ...(p.building?.photos ?? [])].slice(0, 1).map((x) => x.url) },
   };
 }
 
@@ -47,14 +49,22 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
       })
     : null;
 
+  // Units show their own photos first, then the building's; amenities combine both.
+  const photos = [...p.photos, ...(p.building?.photos ?? [])];
+  const amenities = [...new Set([...(p.building?.amenities ?? []), ...p.amenities])];
   const moveInCost = p.monthlyRentPhp * (p.advanceMonths + p.depositMonths);
   const facts: [string, string][] = [
+    ...(p.building ? [["Unit", `${p.unitLabel} · Floor ${p.floor}`] as [string, string]] : []),
     ["Type", typeLabel[p.type]],
     ["Bedrooms", p.bedrooms === 0 ? "Studio" : String(p.bedrooms)],
     ["Bathrooms", String(p.bathrooms)],
     ...(p.floorAreaSqm ? [["Floor area", `${p.floorAreaSqm} sqm`] as [string, string]] : []),
     ...(p.furnishing ? [["Furnishing", furnishingLabel[p.furnishing]] as [string, string]] : []),
     ["Pets", p.petsAllowed ? "Allowed" : "Not allowed"],
+    ...(["electricity", "water"] as const).flatMap((u) => {
+      const d = describeTerms(effectiveTerms(p, p.building, u), u);
+      return d ? [[u === "electricity" ? "Electricity" : "Water", d] as [string, string]] : [];
+    }),
     ["Minimum lease", `${p.minLeaseMonths} months`],
     ["Available", p.availableFrom ? new Date(p.availableFrom).toLocaleDateString("en-PH", { dateStyle: "medium" }) : "Now"],
   ];
@@ -68,21 +78,21 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         </p>
       )}
 
-      {p.photos.length <= 1 ? (
+      {photos.length <= 1 ? (
         <div className="mt-4 aspect-[16/9] max-h-[480px] w-full overflow-hidden rounded-2xl bg-slate-100">
-          {p.photos[0] ? (
+          {photos[0] ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={p.photos[0].url} alt="" className="h-full w-full object-cover" />
+            <img src={photos[0].url} alt="" className="h-full w-full object-cover" />
           ) : (
             <div className="flex h-full items-center justify-center text-slate-400">No photos yet</div>
           )}
         </div>
       ) : (
         <div className="mt-4 grid max-h-[480px] grid-cols-4 grid-rows-2 gap-2 overflow-hidden rounded-2xl">
-          {p.photos.slice(0, 5).map((ph, i) => (
+          {photos.slice(0, 5).map((ph, i) => (
             // eslint-disable-next-line @next/next/no-img-element
             <img key={ph.id} src={ph.url} alt=""
-              className={`h-full w-full object-cover ${i === 0 ? `col-span-4 row-span-2 sm:row-span-2 ${p.photos.length === 2 ? "sm:col-span-3" : "sm:col-span-2"}` : "hidden sm:block"}`} />
+              className={`h-full w-full object-cover ${i === 0 ? `col-span-4 row-span-2 sm:row-span-2 ${photos.length === 2 ? "sm:col-span-3" : "sm:col-span-2"}` : "hidden sm:block"}`} />
           ))}
         </div>
       )}
@@ -91,10 +101,15 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         <div className="lg:col-span-2">
           <h1 className="text-3xl font-bold">{p.title}</h1>
           <p className="mt-1 text-slate-600">{[p.street, p.barangay, p.city, p.province].filter(Boolean).join(", ")}</p>
+          {p.building && (
+            <Link href={`/buildings/${p.building.id}`} className="mt-2 inline-block text-sm text-emerald-700 underline">
+              See all available units in {p.building.name}
+            </Link>
+          )}
 
           <dl className="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-slate-200 p-5 sm:grid-cols-4">
             {facts.map(([k, v]) => (
-              <div key={k}>
+              <div key={k} className={k === "Electricity" || k === "Water" ? "col-span-2" : ""}>
                 <dt className="text-xs text-slate-500">{k}</dt>
                 <dd className="font-medium">{v}</dd>
               </div>
@@ -103,16 +118,22 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
 
           {p.description && (
             <section className="mt-8">
-              <h2 className="text-xl font-semibold">About this place</h2>
+              <h2 className="text-xl font-semibold">{p.building ? "About this unit" : "About this place"}</h2>
               <p className="mt-2 whitespace-pre-line text-slate-700">{p.description}</p>
             </section>
           )}
+          {p.building?.description && (
+            <section className="mt-8">
+              <h2 className="text-xl font-semibold">About {p.building.name}</h2>
+              <p className="mt-2 whitespace-pre-line text-slate-700">{p.building.description}</p>
+            </section>
+          )}
 
-          {p.amenities.length > 0 && (
+          {amenities.length > 0 && (
             <section className="mt-8">
               <h2 className="text-xl font-semibold">Amenities</h2>
               <ul className="mt-3 grid grid-cols-2 gap-2 text-slate-700 sm:grid-cols-3">
-                {p.amenities.map((a) => <li key={a}>✓ {a}</li>)}
+                {amenities.map((a) => <li key={a}>✓ {a}</li>)}
               </ul>
             </section>
           )}

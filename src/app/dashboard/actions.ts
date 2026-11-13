@@ -6,9 +6,11 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { db } from "@/db";
-import { property, propertyPhoto, user } from "@/db/schema";
+import { building, property, propertyPhoto, user } from "@/db/schema";
 import { requireOwner, requireUser } from "@/lib/session";
-import { uploadPhoto, deletePhoto as removeFile, validatePhoto } from "@/lib/storage";
+import { uploadPhoto, deletePhoto as removeFile } from "@/lib/storage";
+import { checkPhotos, photosFrom } from "@/lib/photos";
+import { parseUtilities } from "@/lib/utility-input";
 import { auth } from "@/lib/auth";
 
 export type FormState = { error?: string } | undefined;
@@ -43,10 +45,6 @@ function parse(formData: FormData) {
   });
 }
 
-function photosFrom(formData: FormData) {
-  return formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
-}
-
 async function savePhotos(propertyId: string, ownerId: string, files: File[]) {
   if (!files.length) return;
   const [{ top }] = await db
@@ -57,14 +55,6 @@ async function savePhotos(propertyId: string, ownerId: string, files: File[]) {
   for (const file of files) {
     const url = await uploadPhoto(file, `${ownerId}/${propertyId}`);
     await db.insert(propertyPhoto).values({ propertyId, url, position: pos++ });
-  }
-}
-
-function checkPhotos(files: File[], existing = 0): string | undefined {
-  if (existing + files.length > 20) return "You can upload up to 20 photos per property.";
-  for (const f of files) {
-    const err = validatePhoto(f);
-    if (err) return err;
   }
 }
 
@@ -81,6 +71,8 @@ export async function createProperty(_prev: FormState, formData: FormData): Prom
   const { user: me } = await requireOwner();
   const parsed = parse(formData);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const util = parseUtilities(formData, true);
+  if ("error" in util) return { error: util.error };
   const files = photosFrom(formData);
   const photoErr = checkPhotos(files);
   if (photoErr) return { error: photoErr };
@@ -88,7 +80,7 @@ export async function createProperty(_prev: FormState, formData: FormData): Prom
   const publish = formData.get("intent") === "publish";
   const [row] = await db
     .insert(property)
-    .values({ ...parsed.data, ownerId: me.id, status: publish ? "active" : "draft" })
+    .values({ ...parsed.data, ...util.data, ownerId: me.id, status: publish ? "active" : "draft" })
     .returning({ id: property.id });
   await savePhotos(row.id, me.id, files);
   revalidatePath("/dashboard");
@@ -98,18 +90,45 @@ export async function createProperty(_prev: FormState, formData: FormData): Prom
 export async function updateProperty(id: string, _prev: FormState, formData: FormData): Promise<FormState> {
   const { user: me } = await requireOwner();
   const existing = await ownedProperty(id, me.id);
+
+  // Units in a building take their title and address from the building.
+  let unitFields: { unitLabel: string; floor: number } | undefined;
+  if (existing.buildingId) {
+    const b = await db.query.building.findFirst({ where: eq(building.id, existing.buildingId) });
+    if (!b) return { error: "Building not found." };
+    const label = String(formData.get("unitLabel") ?? existing.unitLabel ?? "").trim();
+    const floor = Number(formData.get("floor") ?? existing.floor);
+    if (!label || label.length > 20) return { error: "Enter a unit number." };
+    if (!Number.isInteger(floor) || floor < 1 || floor > 200) return { error: "Enter a valid floor number." };
+    if (label !== existing.unitLabel) {
+      const clash = await db.query.property.findFirst({
+        where: and(eq(property.buildingId, b.id), eq(property.unitLabel, label)),
+      });
+      if (clash) return { error: `Unit ${label} already exists in this building.` };
+    }
+    unitFields = { unitLabel: label, floor };
+    formData.set("title", `${b.name} – Unit ${label}`);
+    for (const k of ["street", "barangay", "city", "province"] as const) formData.set(k, b[k] ?? "");
+  }
+
   const parsed = parse(formData);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const util = parseUtilities(formData, true);
+  if ("error" in util) return { error: util.error };
   const files = photosFrom(formData);
   const photoErr = checkPhotos(files, existing.photos.length);
   if (photoErr) return { error: photoErr };
 
   const intent = formData.get("intent");
   const status = intent === "publish" ? "active" : intent === "draft" ? "draft" : existing.status;
-  await db.update(property).set({ ...parsed.data, status }).where(eq(property.id, id));
+  await db.update(property).set({ ...parsed.data, ...util.data, ...unitFields, status }).where(eq(property.id, id));
   await savePhotos(id, me.id, files);
   revalidatePath("/dashboard");
   revalidatePath(`/listings/${id}`);
+  if (existing.buildingId) {
+    revalidatePath(`/dashboard/buildings/${existing.buildingId}`);
+    redirect(`/dashboard/buildings/${existing.buildingId}?saved=1`);
+  }
   redirect("/dashboard?saved=updated");
 }
 

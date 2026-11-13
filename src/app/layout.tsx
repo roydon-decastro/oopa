@@ -15,7 +15,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html lang="en">
       <body className="min-h-screen bg-white text-slate-900 antialiased">
-        <header className="border-b border-slate-200">
+        <header className="border-b border-slate-200 print:hidden">
           <nav className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
             <Link href="/" className="text-xl font-bold text-emerald-700">Oopa</Link>
             <div className="flex flex-wrap items-center gap-4 text-sm">
@@ -46,7 +46,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           </nav>
         </header>
         {children}
-        <footer className="mt-24 border-t border-slate-200 py-8 text-center text-sm text-slate-500">
+        <footer className="mt-24 border-t print:hidden border-slate-200 py-8 text-center text-sm text-slate-500">
           © {new Date().getFullYear()} Oopa · Made in the Philippines
         </footer>
       </body>

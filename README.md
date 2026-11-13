@@ -14,12 +14,17 @@ Rental marketplace for the Philippines: owners list properties, renters browse a
 
 Local Postgres also works: any `DATABASE_URL` that isn't a neon.tech host uses the regular `pg` driver.
 
+Updating the live Neon database by hand: run the SQL files in `drizzle/` in the Neon SQL editor.
+`drizzle/neon-manual-update-0001-0002.sql` applies buildings + utilities and is safe to re-run.
+
 Changing the schema: edit `src/db/schema.ts`, run `npm run db:generate`, then `npm run db:migrate`.
 
 ## Data model
 
 - `user`, `session`, `account`, `verification`: Better Auth tables. `user.role` is `owner` or `renter`.
 - `property`: listings with rent in PHP, deposit/advance months, PH address (barangay, city, province).
+- `building`, `building_photo`: multi-unit buildings. Each unit is a `property` row with `building_id`, `unit_label` and `floor`; units inherit the building's address, photos and amenities.
+- `meter_reading`: electricity/water sub-meter readings per unit, with usage, rate and charge saved at entry time. Utility terms (sub-metered, included, own meter, fixed fee) live on buildings (defaults) and units (overrides).
 - `property_photo`: photo URLs. Uploads go to Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set, otherwise to `./.uploads` for local development.
 - `application`: a renter's application to a property; owners approve or reject.
 

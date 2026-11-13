@@ -36,4 +36,4 @@ in server code, since Neon has no built-in row level security tied to logins.
 1. ✅ Project setup
 2. ✅ Owner side: sign up, list and manage properties
 3. ✅ Renter side: browse, search, apply; owners approve or reject
-4. Launch: landing page, SEO, terms and privacy (Data Privacy Act of 2012)
+4. ✅ Launch prep: owner landing page, SEO, terms and privacy (Data Privacy Act of 2012), email alerts

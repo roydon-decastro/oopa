@@ -3,9 +3,12 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
-import { application, property } from "@/db/schema";
+import { application, property, user as userTable } from "@/db/schema";
+import { sendEmail } from "@/lib/email";
+import { formatPHP } from "@/lib/format";
 import { requireOwner, requireUser } from "@/lib/session";
 
 export type ApplyState = { error?: string } | undefined;
@@ -40,6 +43,23 @@ export async function applyToProperty(propertyId: string, _prev: ApplyState, for
   }
   revalidatePath("/applications");
   revalidatePath("/dashboard");
+
+  const d = parsed.data;
+  after(async () => {
+    const owner = await db.query.user.findFirst({ where: eq(userTable.id, listing.ownerId) });
+    if (!owner) return;
+    await sendEmail({
+      to: owner.email,
+      subject: `New application: ${listing.title}`,
+      heading: `${user.name} applied for ${listing.title}`,
+      lines: [
+        `Move-in: ${d.moveInDate} · Lease: ${d.leaseMonths} months · Occupants: ${d.occupants}`,
+        ...(d.monthlyIncomePhp ? [`Monthly income: ${formatPHP(d.monthlyIncomePhp)} (${(d.monthlyIncomePhp / listing.monthlyRentPhp).toFixed(1)}× rent)`] : []),
+        ...(d.message ? [`Message: “${d.message.slice(0, 500)}”`] : []),
+      ],
+      cta: { label: "Review the application", path: `/dashboard/applications?property=${listing.id}` },
+    });
+  });
   redirect("/applications?sent=1");
 }
 
@@ -58,6 +78,28 @@ export async function decideApplication(id: string, status: "reviewing" | "appro
   if (!row || row.property.ownerId !== user.id) throw new Error("Application not found.");
   if (row.status === "withdrawn") throw new Error("The renter withdrew this application.");
   await db.update(application).set({ status }).where(eq(application.id, id));
+  if (status !== "reviewing" && status !== row.status) {
+    after(async () => {
+      const renter = await db.query.user.findFirst({ where: eq(userTable.id, row.renterId) });
+      if (!renter) return;
+      await sendEmail(status === "approved" ? {
+        to: renter.email,
+        subject: `Approved: ${row.property.title}`,
+        heading: "Good news, your application was approved",
+        lines: [
+          `The owner approved your application for ${row.property.title}.`,
+          `They now have your contact details and will reach out to arrange the viewing, contract and move-in. Please confirm the owner's identity and visit the property before paying anything.`,
+        ],
+        cta: { label: "View my applications", path: "/applications" },
+      } : {
+        to: renter.email,
+        subject: `Update on your application: ${row.property.title}`,
+        heading: "The owner chose another applicant",
+        lines: [`Your application for ${row.property.title} wasn't accepted this time. There are more places waiting for you.`],
+        cta: { label: "Browse rentals", path: "/listings" },
+      });
+    });
+  }
   revalidatePath("/dashboard/applications");
   revalidatePath("/dashboard");
 }

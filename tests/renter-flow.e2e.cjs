@@ -18,7 +18,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   const owner = await (await b.newContext(ctxOpts)).newPage();
   await owner.goto(base + '/signup?role=owner');
   await owner.fill('#name', 'Liza Reyes'); await owner.fill('#email', `owner${stamp}@example.com`); await owner.fill('#password', 'password123');
-  await owner.click('button:has-text("Create account")'); await owner.waitForURL('**/dashboard');
+  await owner.check('input[name=consent]'); await owner.click('button:has-text(\"Create account\")'); await owner.waitForURL('**/dashboard');
   await owner.goto(base + '/dashboard/properties/new');
   await owner.fill('input[name=title]', title);
   await owner.selectOption('select[name=type]', 'apartment');
@@ -49,7 +49,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await r.click('text=Sign up to apply');
   await r.fill('#name', 'Paolo Garcia'); await r.fill('#email', `renter${stamp}@example.com`); await r.fill('#password', 'password123');
   await r.fill('#phone', '09181112222');
-  await r.click('button:has-text("Create account")');
+  await r.check('input[name=consent]'); await r.click('button:has-text(\"Create account\")');
   await r.waitForURL(listingUrl);
   if (shots) { await r.waitForFunction(() => [...document.images].every(i => i.complete)); await r.screenshot({ path: shots + '/listing.png' }); }
   await r.fill('input[name=moveInDate]', new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10));

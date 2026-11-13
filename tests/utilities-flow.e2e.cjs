@@ -14,7 +14,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
 
   await o.goto(base + '/signup?role=owner');
   await o.fill('#name', 'Mila Cruz'); await o.fill('#email', `uowner${stamp}@example.com`); await o.fill('#password', 'password123');
-  await o.click('button:has-text("Create account")'); await o.waitForURL('**/dashboard');
+  await o.check('input[name=consent]'); await o.click('button:has-text(\"Create account\")'); await o.waitForURL('**/dashboard');
 
   // Building: 2 floors x 3 units, electricity sub-metered at 13.50/kWh, water sub-metered 80/m3 with 150 minimum
   await o.goto(base + '/dashboard/buildings/new');

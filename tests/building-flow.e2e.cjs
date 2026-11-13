@@ -18,7 +18,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   o.on('pageerror', (e) => log('PAGEERROR', e.message));
   await o.goto(base + '/signup?role=owner');
   await o.fill('#name', 'Ramon Tan'); await o.fill('#email', `bowner${stamp}@example.com`); await o.fill('#password', 'password123');
-  await o.click('button:has-text("Create account")'); await o.waitForURL('**/dashboard');
+  await o.check('input[name=consent]'); await o.click('button:has-text(\"Create account\")'); await o.waitForURL('**/dashboard');
 
   // Create a 4-floor, 5-per-floor building as drafts
   await o.click('text=+ Add a building');
@@ -98,7 +98,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await r.click('text=Sign up to apply');
   await r.fill('#name', 'Ana Lim'); await r.fill('#email', `brenter${stamp}@example.com`); await r.fill('#password', 'password123');
   const unitUrl = new URL(r.url()).searchParams.get('next');
-  await r.click('button:has-text("Create account")'); await r.waitForURL('**' + unitUrl);
+  await r.check('input[name=consent]'); await r.click('button:has-text(\"Create account\")'); await r.waitForURL('**' + unitUrl);
   await r.fill('input[name=moveInDate]', new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10));
   await r.click('button:has-text("Send application")'); await r.waitForURL('**/applications?sent=1');
   log('renter applied to unit 403');

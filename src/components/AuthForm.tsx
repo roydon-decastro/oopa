@@ -89,6 +89,16 @@ export default function AuthForm({
           autoComplete={mode === "signup" ? "new-password" : "current-password"}
         />
       </div>
+      {mode === "signup" && (
+        <label className="flex items-start gap-2 text-sm text-slate-600">
+          <input type="checkbox" name="consent" required className="mt-0.5 size-4 accent-emerald-700" />
+          <span>
+            I agree to the <Link href="/terms" target="_blank" className="text-emerald-700 underline">Terms of Service</Link> and the{" "}
+            <Link href="/privacy" target="_blank" className="text-emerald-700 underline">Privacy Policy</Link>, including how my data is shared with
+            owners I apply to.
+          </span>
+        </label>
+      )}
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       <button className="btn w-full" disabled={loading}>
         {loading ? "Please wait…" : mode === "signup" ? "Create account" : "Log in"}

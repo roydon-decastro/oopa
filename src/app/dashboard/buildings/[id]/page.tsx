@@ -26,6 +26,7 @@ export default async function BuildingDashboard({
   const units = b.units.map((u) => ({
     id: u.id, unitLabel: u.unitLabel, floor: u.floor, status: u.status, monthlyRentPhp: u.monthlyRentPhp, bedrooms: u.bedrooms,
     removed: !!u.removedAt,
+    bedsTotal: u.bedsTotal, bedsTaken: u.bedsTaken,
     pending: u.applications.filter((a) => a.status === "submitted").length,
   }));
 
@@ -51,12 +52,14 @@ export default async function BuildingDashboard({
       </div>
       {created && (
         <p className="mt-6 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Created {created} units. Tick the occupied ones and click <strong>Mark occupied</strong>, then list the vacant ones.
+          {b.isDormitory
+            ? <>Created {created} rooms. Use the − and + buttons on each room to set how many beds are already taken, then list the rooms with free beds.</>
+            : <>Created {created} units. Tick the occupied ones and click <strong>Mark occupied</strong>, then list the vacant ones.</>}
         </p>
       )}
       {saved && <p className="mt-6 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800">Changes saved.</p>}
       <div className="mt-8">
-        <UnitGrid buildingId={b.id} units={units} />
+        <UnitGrid buildingId={b.id} units={units} dorm={b.isDormitory} />
       </div>
     </main>
   );

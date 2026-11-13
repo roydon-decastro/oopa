@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq, inArray, max } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import { requireOwner } from "@/lib/session";
 import { checkPhotos, photosFrom } from "@/lib/photos";
 import { deletePhoto as removeFile, uploadPhoto } from "@/lib/storage";
 import { parseUtilities } from "@/lib/utility-input";
+import { parseRules } from "@/lib/dorm";
 
 export type BuildingFormState = { error?: string } | undefined;
 
@@ -42,7 +43,12 @@ const UnitTemplate = z.object({
   publish: z.preprocess((v) => v === "on", z.boolean()),
 });
 
-const titleFor = (buildingName: string, label: string) => `${buildingName} – Unit ${label}`;
+// Dormitory rooms: rented per bed.
+const DormTemplate = z.object({
+  bedsPerRoom: z.coerce.number({ message: "Enter how many beds each room has." }).int().min(1, "At least 1 bed per room.").max(50),
+});
+
+const titleFor = (buildingName: string, label: string, dorm = false) => `${buildingName} – ${dorm ? "Room" : "Unit"} ${label}`;
 const labelFor = (floor: number, n: number) => `${floor}${String(n).padStart(2, "0")}`;
 
 function parseBuilding(formData: FormData) {
@@ -72,17 +78,24 @@ export async function createBuilding(_prev: BuildingFormState, formData: FormDat
   const { user } = await requireOwner();
   const b = parseBuilding(formData);
   if (!b.success) return { error: b.error.issues[0].message };
+  const dorm = formData.get("isDormitory") === "on";
+  if (dorm) formData.set("type", "bedspace");
   const t = UnitTemplate.safeParse(Object.fromEntries(formData));
   if (!t.success) return { error: t.error.issues[0].message };
+  const d = dorm ? DormTemplate.safeParse(Object.fromEntries(formData)) : null;
+  if (d && !d.success) return { error: d.error.issues[0].message };
+  const bedsTotal = d?.success ? d.data.bedsPerRoom : null;
+  const rules = parseRules(formData);
   const util = parseUtilities(formData);
   if ("error" in util) return { error: util.error };
-  if (t.data.floors * t.data.unitsPerFloor > 500) return { error: "That's more than 500 units. Please contact us for very large buildings." };
+  if (t.data.floors * t.data.unitsPerFloor > 500) return { error: `That's more than 500 ${dorm ? "rooms" : "units"}. Please contact us for very large buildings.` };
   const files = photosFrom(formData);
   const photoErr = checkPhotos(files);
   if (photoErr) return { error: photoErr };
 
   const { floors, unitsPerFloor, publish, ...unit } = t.data;
-  const [row] = await db.insert(building).values({ ...b.data, ...util.data, ownerId: user.id, floors }).returning({ id: building.id });
+  const [row] = await db.insert(building).values({ ...b.data, ...util.data, ...rules, isDormitory: dorm, ownerId: user.id, floors })
+    .returning({ id: building.id });
 
   const units = [];
   for (let f = 1; f <= floors; f++) {
@@ -94,7 +107,9 @@ export async function createBuilding(_prev: BuildingFormState, formData: FormDat
         buildingId: row.id,
         unitLabel: label,
         floor: f,
-        title: titleFor(b.data.name, label),
+        title: titleFor(b.data.name, label, dorm),
+        bedsTotal,
+        bedsTaken: 0,
         status: publish ? ("active" as const) : ("draft" as const),
         street: b.data.street,
         barangay: b.data.barangay,
@@ -120,12 +135,12 @@ export async function updateBuilding(id: string, _prev: BuildingFormState, formD
   const photoErr = checkPhotos(files, existing.photos.length);
   if (photoErr) return { error: photoErr };
 
-  await db.update(building).set({ ...b.data, ...util.data }).where(eq(building.id, id));
+  await db.update(building).set({ ...b.data, ...util.data, ...parseRules(formData) }).where(eq(building.id, id));
   // Keep every unit's address and title in sync with the building.
   const units = await db.select({ id: property.id, unitLabel: property.unitLabel }).from(property).where(eq(property.buildingId, id));
   for (const u of units) {
     await db.update(property).set({
-      title: titleFor(b.data.name, u.unitLabel ?? ""),
+      title: titleFor(b.data.name, u.unitLabel ?? "", existing.isDormitory),
       street: b.data.street, barangay: b.data.barangay, city: b.data.city, province: b.data.province,
     }).where(eq(property.id, u.id));
   }
@@ -141,16 +156,17 @@ export async function addUnit(buildingId: string, _prev: BuildingFormState, form
   const b = await ownedBuilding(buildingId, user.id);
   const label = String(formData.get("unitLabel") ?? "").trim();
   const floor = Number(formData.get("floor"));
-  if (!label || label.length > 20) return { error: "Enter a unit number, e.g. 106." };
+  if (!label || label.length > 20) return { error: `Enter a ${b.isDormitory ? "room" : "unit"} number, e.g. 106.` };
   if (!Number.isInteger(floor) || floor < 1 || floor > 200) return { error: "Enter a valid floor number." };
 
   const siblings = await db.query.property.findMany({ where: eq(property.buildingId, buildingId), orderBy: asc(property.unitLabel) });
-  if (siblings.some((s) => s.unitLabel === label)) return { error: `Unit ${label} already exists.` };
+  if (siblings.some((s) => s.unitLabel === label)) return { error: `${b.isDormitory ? "Room" : "Unit"} ${label} already exists.` };
   const template = siblings.find((s) => s.unitLabel?.slice(-2) === label.slice(-2)) ?? siblings[0];
 
   await db.insert(property).values({
-    ownerId: user.id, buildingId, unitLabel: label, floor, title: titleFor(b.name, label), status: "draft",
-    type: template?.type ?? "apartment",
+    ownerId: user.id, buildingId, unitLabel: label, floor, title: titleFor(b.name, label, b.isDormitory), status: "draft",
+    type: template?.type ?? (b.isDormitory ? "bedspace" : "apartment"),
+    bedsTotal: template?.bedsTotal ?? (b.isDormitory ? 4 : null), bedsTaken: 0,
     monthlyRentPhp: template?.monthlyRentPhp ?? 0.01,
     depositMonths: template?.depositMonths ?? 2, advanceMonths: template?.advanceMonths ?? 1,
     bedrooms: template?.bedrooms ?? 1, bathrooms: template?.bathrooms ?? 1,
@@ -167,8 +183,15 @@ export async function setUnitsStatus(buildingId: string, unitIds: string[], stat
   const { user } = await requireOwner();
   await ownedBuilding(buildingId, user.id);
   if (!unitIds.length) return;
-  await db.update(property).set({ status })
-    .where(and(eq(property.buildingId, buildingId), inArray(property.id, unitIds)));
+  const where = and(eq(property.buildingId, buildingId), inArray(property.id, unitIds));
+  await db.update(property).set({ status }).where(and(where, isNull(property.bedsTotal)));
+  // Per-bed rooms: "Mark full" fills every bed; listing a full room as vacant frees its beds.
+  await db.update(property).set({
+    status,
+    bedsTaken: status === "rented" ? sql`${property.bedsTotal}`
+      : status === "active" ? sql`case when ${property.bedsTaken} >= ${property.bedsTotal} then 0 else ${property.bedsTaken} end`
+      : sql`${property.bedsTaken}`,
+  }).where(and(where, isNotNull(property.bedsTotal)));
   revalidatePath(`/dashboard/buildings/${buildingId}`);
 }
 

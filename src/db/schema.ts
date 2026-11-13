@@ -100,6 +100,15 @@ export const applicationStatus = pgEnum("application_status", [
 //  fixed:    flat monthly fee
 export const utilityBilling = pgEnum("utility_billing", ["submeter", "included", "direct", "fixed"]);
 export const utilityKind = pgEnum("utility_kind", ["electricity", "water"]);
+// Who a dorm or bedspace accepts.
+export const genderPolicy = pgEnum("gender_policy", ["any", "male", "female"]);
+
+// Dorm / boarding house rules. On a building they apply to every room; on a room they override the building.
+const dormColumns = () => ({
+  genderPolicy: genderPolicy("gender_policy"),
+  curfew: text("curfew"),
+  houseRules: text("house_rules"),
+});
 
 const money = (name: string) => numeric(name, { precision: 12, scale: 2, mode: "number" });
 const rate = (name: string) => numeric(name, { precision: 10, scale: 4, mode: "number" });
@@ -133,6 +142,9 @@ export const building = pgTable(
     longitude: doublePrecision("longitude"),
     amenities: text("amenities").array().notNull().default([]),
     ...utilityColumns(),
+    // A dormitory / boarding house: its rooms are rented per bed.
+    isDormitory: boolean("is_dormitory").notNull().default(false),
+    ...dormColumns(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
   },
@@ -186,6 +198,10 @@ export const property = pgTable(
     ...utilityColumns(),
     electricMeterNo: text("electric_meter_no"),
     waterMeterNo: text("water_meter_no"),
+    // Bedspace / dorm room rented per bed: monthlyRentPhp is the price per bed.
+    bedsTotal: smallint("beds_total"),
+    bedsTaken: smallint("beds_taken").notNull().default(0),
+    ...dormColumns(),
     // Set when a site admin takes the listing down. The owner can't republish it until an admin restores it.
     removedAt: timestamp("removed_at"),
     removedReason: text("removed_reason"),

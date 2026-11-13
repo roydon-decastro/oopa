@@ -31,7 +31,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     orderBy: desc(building.createdAt),
     with: {
       photos: { orderBy: asc(buildingPhoto.position), limit: 1 },
-      units: { columns: { status: true }, with: { applications: { columns: { status: true } } } },
+      units: { columns: { status: true, bedsTotal: true, bedsTaken: true }, with: { applications: { columns: { status: true } } } },
     },
   });
   const listings = await db.query.property.findMany({
@@ -72,7 +72,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     <p className="truncate font-semibold">{b.name}</p>
                     <p className="text-sm text-slate-600">{b.city}, {b.province}</p>
                     <p className="mt-1 text-sm">
-                      {b.units.length} units · <span className="text-blue-800">{occupied} occupied</span> · <span className="text-emerald-800">{vacant} vacant</span>
+                      {b.isDormitory ? (() => {
+                        const beds = b.units.reduce((n, u) => n + (u.bedsTotal ?? 0), 0);
+                        const taken = b.units.reduce((n, u) => n + Math.min(u.bedsTaken, u.bedsTotal ?? 0), 0);
+                        return <>{b.units.length} rooms · <span className="text-blue-800">{taken}/{beds} beds taken</span> · <span className="text-emerald-800">{beds - taken} free</span></>;
+                      })() : <>{b.units.length} units · <span className="text-blue-800">{occupied} occupied</span> · <span className="text-emerald-800">{vacant} vacant</span></>}
                     </p>
                     {pending > 0 && <p className="mt-1 text-xs font-medium text-amber-800">{pending} new application{pending > 1 ? "s" : ""}</p>}
                   </div>
@@ -121,10 +125,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 </div>
                 <Link href={`/listings/${l.id}`} className="mt-1 block truncate font-semibold hover:text-emerald-700">{l.title}</Link>
                 <p className="text-sm text-slate-600">
-                  {formatPHP(l.monthlyRentPhp)}/mo · {[l.barangay, l.city, l.province].filter(Boolean).join(", ")}
+                  {formatPHP(l.monthlyRentPhp)}{l.bedsTotal != null ? "/bed" : ""}/mo · {[l.barangay, l.city, l.province].filter(Boolean).join(", ")}
                 </p>
               </div>
-              <ListingActions id={l.id} status={l.status} />
+              <ListingActions id={l.id} status={l.status} beds={l.bedsTotal != null ? { total: l.bedsTotal, taken: l.bedsTaken } : null} />
             </li>
           ))}
         </ul>

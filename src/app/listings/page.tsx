@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { and, asc, count, desc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { buildingPhoto, property, propertyPhoto } from "@/db/schema";
+import { building, buildingPhoto, property, propertyPhoto } from "@/db/schema";
 import { publicListing } from "@/lib/visibility";
 import PropertyCard from "@/components/PropertyCard";
 import { PROPERTY_TYPES } from "@/lib/ph";
@@ -15,7 +15,7 @@ const SORTS = {
   price_desc: desc(property.monthlyRentPhp),
 };
 
-type Search = { city?: string; type?: string; min?: string; max?: string; beds?: string; sort?: string; page?: string };
+type Search = { city?: string; type?: string; min?: string; max?: string; beds?: string; for?: string; sort?: string; page?: string };
 
 const num = (v?: string) => (v && !isNaN(Number(v)) ? Number(v) : undefined);
 
@@ -32,6 +32,11 @@ export default async function ListingsPage({ searchParams }: { searchParams: Pro
   if (num(sp.min) !== undefined) where.push(gte(property.monthlyRentPhp, num(sp.min)!));
   if (num(sp.max) !== undefined) where.push(lte(property.monthlyRentPhp, num(sp.max)!));
   if (num(sp.beds) !== undefined) where.push(gte(property.bedrooms, num(sp.beds)!));
+  // "For women" / "For men": places that accept them (their own policy, or mixed / not specified).
+  if (sp.for === "male" || sp.for === "female") {
+    const g = sp.for;
+    where.push(sql`coalesce(${property.genderPolicy}, (select ${building.genderPolicy} from ${building} where ${building.id} = ${property.buildingId}), 'any') in ('any', ${g})`);
+  }
   const filter = and(...where);
   const sort = SORTS[sp.sort as keyof typeof SORTS] ?? SORTS.newest;
 
@@ -43,7 +48,7 @@ export default async function ListingsPage({ searchParams }: { searchParams: Pro
       offset: (page - 1) * PAGE_SIZE,
       with: {
         photos: { orderBy: asc(propertyPhoto.position), limit: 1, columns: { url: true } },
-        building: { columns: { name: true }, with: { photos: { orderBy: asc(buildingPhoto.position), limit: 1, columns: { url: true } } } },
+        building: { columns: { name: true, genderPolicy: true }, with: { photos: { orderBy: asc(buildingPhoto.position), limit: 1, columns: { url: true } } } },
       },
     }),
     db.select({ total: count() }).from(property).where(filter),
@@ -59,7 +64,7 @@ export default async function ListingsPage({ searchParams }: { searchParams: Pro
     <main className="mx-auto max-w-6xl px-4 py-10">
       <h1 className="text-3xl font-bold">Rentals{q ? ` in ${q}` : " across the Philippines"}</h1>
 
-      <form className="mt-6 grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-3 lg:grid-cols-7">
+      <form className="mt-6 grid gap-3 rounded-xl border border-slate-200 p-4 sm:grid-cols-3 lg:grid-cols-8">
         <input className="input lg:col-span-2" name="city" defaultValue={sp.city} placeholder="City, barangay or area" />
         <select className="input" name="type" defaultValue={sp.type ?? ""}>
           <option value="">Any type</option>
@@ -71,12 +76,17 @@ export default async function ListingsPage({ searchParams }: { searchParams: Pro
           <option value="">Any bedrooms</option>
           {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}+ BR</option>)}
         </select>
+        <select className="input" name="for" defaultValue={sp.for ?? ""}>
+          <option value="">Anyone</option>
+          <option value="female">For women</option>
+          <option value="male">For men</option>
+        </select>
         <select className="input" name="sort" defaultValue={sp.sort ?? "newest"}>
           <option value="newest">Newest</option>
           <option value="price_asc">Lowest price</option>
           <option value="price_desc">Highest price</option>
         </select>
-        <div className="flex gap-2 sm:col-span-3 lg:col-span-7">
+        <div className="flex gap-2 sm:col-span-3 lg:col-span-8">
           <button className="btn">Search</button>
           <Link href="/listings" className="btn-outline">Clear</Link>
         </div>

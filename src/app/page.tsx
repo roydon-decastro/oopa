@@ -17,7 +17,7 @@ async function latest() {
     limit: 6,
     with: {
       photos: { orderBy: asc(propertyPhoto.position), limit: 1, columns: { url: true } },
-      building: { columns: { name: true }, with: { photos: { orderBy: asc(buildingPhoto.position), limit: 1, columns: { url: true } } } },
+      building: { columns: { name: true, genderPolicy: true }, with: { photos: { orderBy: asc(buildingPhoto.position), limit: 1, columns: { url: true } } } },
     },
   });
 }

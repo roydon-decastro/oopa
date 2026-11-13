@@ -30,7 +30,7 @@ export default async function EditPropertyPage({ params }: { params: Promise<{ i
         <Link href="/dashboard" className="text-sm text-slate-500 hover:text-emerald-700">← My listings</Link>
       )}
       <div className="mb-8 mt-2 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold">{row.building ? `Edit unit ${row.unitLabel}` : "Edit property"}</h1>
+        <h1 className="text-3xl font-bold">{row.building ? `Edit ${row.building.isDormitory ? "room" : "unit"} ${row.unitLabel}` : "Edit property"}</h1>
         <Link href={`/dashboard/properties/${row.id}/utilities`} className="btn-outline">⚡💧 Utility bills</Link>
       </div>
       {row.removedAt && (

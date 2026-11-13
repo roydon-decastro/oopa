@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { application, buildingPhoto, property, propertyPhoto } from "@/db/schema";
 import { isPublicListing } from "@/lib/visibility";
 import { isAdmin } from "@/lib/admin";
+import { GENDER_LABEL, bedsLeft, effectiveRules } from "@/lib/dorm";
 import { getSession } from "@/lib/session";
 import { formatPHP } from "@/lib/format";
 import { FURNISHING, PROPERTY_TYPES } from "@/lib/ph";
@@ -56,10 +57,17 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const photos = [...p.photos, ...(p.building?.photos ?? [])];
   const amenities = [...new Set([...(p.building?.amenities ?? []), ...p.amenities])];
   const moveInCost = p.monthlyRentPhp * (p.advanceMonths + p.depositMonths);
+  const perBed = p.bedsTotal != null;
+  const free = bedsLeft(p);
+  const rules = effectiveRules(p, p.building);
   const facts: [string, string][] = [
-    ...(p.building ? [["Unit", `${p.unitLabel} · Floor ${p.floor}`] as [string, string]] : []),
+    ...(p.building ? [[p.building.isDormitory ? "Room" : "Unit", `${p.unitLabel} · Floor ${p.floor}`] as [string, string]] : []),
     ["Type", typeLabel[p.type]],
-    ["Bedrooms", p.bedrooms === 0 ? "Studio" : String(p.bedrooms)],
+    ...(perBed
+      ? [["Beds", `${free} of ${p.bedsTotal} free`] as [string, string]]
+      : [["Bedrooms", p.bedrooms === 0 ? "Studio" : String(p.bedrooms)] as [string, string]]),
+    ...(rules.genderPolicy ? [["For", GENDER_LABEL[rules.genderPolicy]] as [string, string]] : []),
+    ...(rules.curfew ? [["Curfew", rules.curfew] as [string, string]] : []),
     ["Bathrooms", String(p.bathrooms)],
     ...(p.floorAreaSqm ? [["Floor area", `${p.floorAreaSqm} sqm`] as [string, string]] : []),
     ...(p.furnishing ? [["Furnishing", furnishingLabel[p.furnishing]] as [string, string]] : []),
@@ -110,7 +118,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
           <p className="mt-1 text-slate-600">{[p.street, p.barangay, p.city, p.province].filter(Boolean).join(", ")}</p>
           {p.building && (
             <Link href={`/buildings/${p.building.id}`} className="mt-2 inline-block text-sm text-emerald-700 underline">
-              See all available units in {p.building.name}
+              See all available {p.building.isDormitory ? "rooms" : "units"} in {p.building.name}
             </Link>
           )}
 
@@ -125,7 +133,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
 
           {p.description && (
             <section className="mt-8">
-              <h2 className="text-xl font-semibold">{p.building ? "About this unit" : "About this place"}</h2>
+              <h2 className="text-xl font-semibold">{p.building ? `About this ${p.building.isDormitory ? "room" : "unit"}` : "About this place"}</h2>
               <p className="mt-2 whitespace-pre-line text-slate-700">{p.description}</p>
             </section>
           )}
@@ -133,6 +141,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             <section className="mt-8">
               <h2 className="text-xl font-semibold">About {p.building.name}</h2>
               <p className="mt-2 whitespace-pre-line text-slate-700">{p.building.description}</p>
+            </section>
+          )}
+
+          {rules.houseRules && (
+            <section className="mt-8">
+              <h2 className="text-xl font-semibold">House rules</h2>
+              <p className="mt-2 whitespace-pre-line text-slate-700">{rules.houseRules}</p>
             </section>
           )}
 
@@ -152,8 +167,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
 
         <aside className="h-fit rounded-2xl border border-slate-200 p-6 shadow-sm lg:sticky lg:top-6">
           <p className="text-3xl font-bold text-emerald-800">
-            {formatPHP(p.monthlyRentPhp)}<span className="text-base font-normal text-slate-500">/month</span>
+            {formatPHP(p.monthlyRentPhp)}<span className="text-base font-normal text-slate-500">{perBed ? " per bed" : ""}/month</span>
           </p>
+          {perBed && (
+            <p className={`mt-1 text-sm font-medium ${free ? "text-emerald-700" : "text-slate-500"}`}>
+              {free ? `${free} bed${free === 1 ? "" : "s"} available` : "All beds taken"}
+            </p>
+          )}
           <p className="mt-2 text-sm text-slate-600">
             {p.advanceMonths} month{p.advanceMonths === 1 ? "" : "s"} advance + {p.depositMonths} month{p.depositMonths === 1 ? "" : "s"} deposit
           </p>
@@ -175,7 +195,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               </div>
             ) : !isPublicListing(p) ? null : (
               <>
-                <h2 className="mb-3 font-semibold">Apply for this place</h2>
+                <h2 className="mb-3 font-semibold">{perBed ? "Apply for a bed" : "Apply for this place"}</h2>
                 <ApplyForm action={applyToProperty.bind(null, p.id)} minLease={p.minLeaseMonths} />
               </>
             )}

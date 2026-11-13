@@ -35,7 +35,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
     <main className="mx-auto max-w-5xl px-4 py-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">My listings</h1>
-        <Link href="/dashboard/properties/new" className="btn">+ Add a property</Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/applications" className="btn-outline">Applications</Link>
+          <Link href="/dashboard/properties/new" className="btn">+ Add a property</Link>
+        </div>
       </div>
       {saved && BANNERS[saved] && (
         <p className="mt-6 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{BANNERS[saved]}</p>
@@ -64,11 +67,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[l.status]}`}>
                     {STATUS_LABEL[l.status]}
                   </span>
-                  <span className="text-xs text-slate-500">
+                  <Link href={`/dashboard/applications?property=${l.id}`} className="text-xs text-slate-500 underline hover:text-emerald-700">
                     {l.applications.length} application{l.applications.length === 1 ? "" : "s"}
-                  </span>
+                  </Link>
                 </div>
-                <h2 className="mt-1 truncate font-semibold">{l.title}</h2>
+                <Link href={`/listings/${l.id}`} className="mt-1 block truncate font-semibold hover:text-emerald-700">{l.title}</Link>
                 <p className="text-sm text-slate-600">
                   {formatPHP(l.monthlyRentPhp)}/mo · {[l.barangay, l.city, l.province].filter(Boolean).join(", ")}
                 </p>

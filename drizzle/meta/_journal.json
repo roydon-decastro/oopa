@@ -15,6 +15,13 @@
       "when": 1794584508841,
       "tag": "0001_buildings",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794585205096,
+      "tag": "0002_utilities",
+      "breakpoints": true
     }
   ]
 }

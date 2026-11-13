@@ -10,6 +10,7 @@ import { building, property, propertyPhoto, user } from "@/db/schema";
 import { requireOwner, requireUser } from "@/lib/session";
 import { uploadPhoto, deletePhoto as removeFile } from "@/lib/storage";
 import { checkPhotos, photosFrom } from "@/lib/photos";
+import { parseUtilities } from "@/lib/utility-input";
 import { auth } from "@/lib/auth";
 
 export type FormState = { error?: string } | undefined;
@@ -70,6 +71,8 @@ export async function createProperty(_prev: FormState, formData: FormData): Prom
   const { user: me } = await requireOwner();
   const parsed = parse(formData);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const util = parseUtilities(formData, true);
+  if ("error" in util) return { error: util.error };
   const files = photosFrom(formData);
   const photoErr = checkPhotos(files);
   if (photoErr) return { error: photoErr };
@@ -77,7 +80,7 @@ export async function createProperty(_prev: FormState, formData: FormData): Prom
   const publish = formData.get("intent") === "publish";
   const [row] = await db
     .insert(property)
-    .values({ ...parsed.data, ownerId: me.id, status: publish ? "active" : "draft" })
+    .values({ ...parsed.data, ...util.data, ownerId: me.id, status: publish ? "active" : "draft" })
     .returning({ id: property.id });
   await savePhotos(row.id, me.id, files);
   revalidatePath("/dashboard");
@@ -110,13 +113,15 @@ export async function updateProperty(id: string, _prev: FormState, formData: For
 
   const parsed = parse(formData);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const util = parseUtilities(formData, true);
+  if ("error" in util) return { error: util.error };
   const files = photosFrom(formData);
   const photoErr = checkPhotos(files, existing.photos.length);
   if (photoErr) return { error: photoErr };
 
   const intent = formData.get("intent");
   const status = intent === "publish" ? "active" : intent === "draft" ? "draft" : existing.status;
-  await db.update(property).set({ ...parsed.data, ...unitFields, status }).where(eq(property.id, id));
+  await db.update(property).set({ ...parsed.data, ...util.data, ...unitFields, status }).where(eq(property.id, id));
   await savePhotos(id, me.id, files);
   revalidatePath("/dashboard");
   revalidatePath(`/listings/${id}`);

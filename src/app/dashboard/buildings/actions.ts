@@ -9,6 +9,7 @@ import { building, buildingPhoto, property, propertyPhoto } from "@/db/schema";
 import { requireOwner } from "@/lib/session";
 import { checkPhotos, photosFrom } from "@/lib/photos";
 import { deletePhoto as removeFile, uploadPhoto } from "@/lib/storage";
+import { parseUtilities } from "@/lib/utility-input";
 
 export type BuildingFormState = { error?: string } | undefined;
 
@@ -73,13 +74,15 @@ export async function createBuilding(_prev: BuildingFormState, formData: FormDat
   if (!b.success) return { error: b.error.issues[0].message };
   const t = UnitTemplate.safeParse(Object.fromEntries(formData));
   if (!t.success) return { error: t.error.issues[0].message };
+  const util = parseUtilities(formData);
+  if ("error" in util) return { error: util.error };
   if (t.data.floors * t.data.unitsPerFloor > 500) return { error: "That's more than 500 units. Please contact us for very large buildings." };
   const files = photosFrom(formData);
   const photoErr = checkPhotos(files);
   if (photoErr) return { error: photoErr };
 
   const { floors, unitsPerFloor, publish, ...unit } = t.data;
-  const [row] = await db.insert(building).values({ ...b.data, ownerId: user.id, floors }).returning({ id: building.id });
+  const [row] = await db.insert(building).values({ ...b.data, ...util.data, ownerId: user.id, floors }).returning({ id: building.id });
 
   const units = [];
   for (let f = 1; f <= floors; f++) {
@@ -111,11 +114,13 @@ export async function updateBuilding(id: string, _prev: BuildingFormState, formD
   const existing = await ownedBuilding(id, user.id);
   const b = parseBuilding(formData);
   if (!b.success) return { error: b.error.issues[0].message };
+  const util = parseUtilities(formData);
+  if ("error" in util) return { error: util.error };
   const files = photosFrom(formData);
   const photoErr = checkPhotos(files, existing.photos.length);
   if (photoErr) return { error: photoErr };
 
-  await db.update(building).set(b.data).where(eq(building.id, id));
+  await db.update(building).set({ ...b.data, ...util.data }).where(eq(building.id, id));
   // Keep every unit's address and title in sync with the building.
   const units = await db.select({ id: property.id, unitLabel: property.unitLabel }).from(property).where(eq(property.buildingId, id));
   for (const u of units) {

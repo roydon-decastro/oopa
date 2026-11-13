@@ -4,6 +4,8 @@ import { useActionState, useState } from "react";
 import type { Property } from "@/db/schema";
 import type { FormState } from "@/app/dashboard/actions";
 import { AMENITIES, FURNISHING, PROPERTY_TYPES, PROVINCES } from "@/lib/ph";
+import UtilityFields from "./UtilityFields";
+import type { Utility } from "@/lib/utilities";
 
 type Props = {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -11,9 +13,11 @@ type Props = {
   existingPhotoCount?: number;
   /** Set when editing a unit inside a building: title and address come from the building. */
   buildingName?: string;
+  /** For units: the building's utility terms, shown on the "Same as building" option. */
+  buildingUtilities?: Record<Utility, string | null>;
 };
 
-export default function PropertyForm({ action, initial, existingPhotoCount = 0, buildingName }: Props) {
+export default function PropertyForm({ action, initial, existingPhotoCount = 0, buildingName, buildingUtilities }: Props) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const [previews, setPreviews] = useState<string[]>([]);
   const p = initial;
@@ -114,6 +118,8 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0, 
           ))}
         </div>
       </Section>
+
+      <UtilityFields mode={buildingName ? "unit" : "property"} initial={p} buildingSummary={buildingUtilities} />
 
       <Section title={existingPhotoCount ? "Add more photos" : "Photos"}>
         <div className="sm:col-span-2">

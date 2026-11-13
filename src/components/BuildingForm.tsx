@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import type { Building } from "@/db/schema";
 import type { BuildingFormState } from "@/app/dashboard/buildings/actions";
 import { AMENITIES, FURNISHING, PROPERTY_TYPES, PROVINCES } from "@/lib/ph";
+import UtilityFields from "./UtilityFields";
 
 type Props = {
   action: (prev: BuildingFormState, formData: FormData) => Promise<BuildingFormState>;
@@ -105,6 +106,8 @@ export default function BuildingForm({ action, initial }: Props) {
           </Section>
         </>
       )}
+
+      <UtilityFields mode="building" initial={b} />
 
       <Section title={creating ? "Building photos" : "Add more building photos"}>
         <div className="sm:col-span-2">

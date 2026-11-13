@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { building, buildingPhoto, property, propertyPhoto } from "@/db/schema";
 import { getSession } from "@/lib/session";
 import { formatPHP } from "@/lib/format";
+import { describeTerms, effectiveTerms } from "@/lib/utilities";
 
 const isUuid = (s: string) => /^[0-9a-f-]{36}$/.test(s);
 
@@ -94,12 +95,23 @@ export default async function BuildingPage({ params }: { params: Promise<{ id: s
             </>
           )}
         </section>
-        {b.amenities.length > 0 && (
-          <aside className="h-fit rounded-2xl border border-slate-200 p-6">
-            <h2 className="font-semibold">Building amenities</h2>
-            <ul className="mt-3 space-y-1 text-slate-700">{b.amenities.map((a) => <li key={a}>✓ {a}</li>)}</ul>
-          </aside>
-        )}
+        <aside className="h-fit space-y-6 rounded-2xl border border-slate-200 p-6">
+          <div>
+            <h2 className="font-semibold">Utilities</h2>
+            <dl className="mt-2 space-y-1 text-sm text-slate-700">
+              {(["electricity", "water"] as const).map((u) => (
+                <div key={u}><dt className="inline font-medium">{u === "electricity" ? "⚡ Electricity: " : "💧 Water: "}</dt>
+                  <dd className="inline">{describeTerms(effectiveTerms(b, null, u), u) ?? "Ask the owner"}</dd></div>
+              ))}
+            </dl>
+          </div>
+          {b.amenities.length > 0 && (
+            <div>
+              <h2 className="font-semibold">Building amenities</h2>
+              <ul className="mt-3 space-y-1 text-slate-700">{b.amenities.map((a) => <li key={a}>✓ {a}</li>)}</ul>
+            </div>
+          )}
+        </aside>
       </div>
     </main>
   );

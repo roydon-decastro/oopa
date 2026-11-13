@@ -42,7 +42,8 @@ export default async function BuildingDashboard({
             <p className="text-slate-600">{[b.street, b.barangay, b.city, b.province].filter(Boolean).join(", ")}</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/dashboard/buildings/${b.id}/meters`} className="btn">⚡💧 Meter readings</Link>
           <Link href={`/buildings/${b.id}`} className="btn-outline">View public page</Link>
           <Link href={`/dashboard/buildings/${b.id}/edit`} className="btn-outline">Edit building</Link>
         </div>

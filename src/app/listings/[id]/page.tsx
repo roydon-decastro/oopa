@@ -9,6 +9,7 @@ import { formatPHP } from "@/lib/format";
 import { FURNISHING, PROPERTY_TYPES } from "@/lib/ph";
 import ApplyForm from "@/components/ApplyForm";
 import { applyToProperty } from "@/app/applications/actions";
+import { describeTerms, effectiveTerms } from "@/lib/utilities";
 
 const typeLabel = Object.fromEntries(PROPERTY_TYPES) as Record<string, string>;
 const furnishingLabel = Object.fromEntries(FURNISHING) as Record<string, string>;
@@ -60,6 +61,10 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     ...(p.floorAreaSqm ? [["Floor area", `${p.floorAreaSqm} sqm`] as [string, string]] : []),
     ...(p.furnishing ? [["Furnishing", furnishingLabel[p.furnishing]] as [string, string]] : []),
     ["Pets", p.petsAllowed ? "Allowed" : "Not allowed"],
+    ...(["electricity", "water"] as const).flatMap((u) => {
+      const d = describeTerms(effectiveTerms(p, p.building, u), u);
+      return d ? [[u === "electricity" ? "Electricity" : "Water", d] as [string, string]] : [];
+    }),
     ["Minimum lease", `${p.minLeaseMonths} months`],
     ["Available", p.availableFrom ? new Date(p.availableFrom).toLocaleDateString("en-PH", { dateStyle: "medium" }) : "Now"],
   ];
@@ -104,7 +109,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
 
           <dl className="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-slate-200 p-5 sm:grid-cols-4">
             {facts.map(([k, v]) => (
-              <div key={k}>
+              <div key={k} className={k === "Electricity" || k === "Water" ? "col-span-2" : ""}>
                 <dt className="text-xs text-slate-500">{k}</dt>
                 <dd className="font-medium">{v}</dd>
               </div>

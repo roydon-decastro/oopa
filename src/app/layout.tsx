@@ -23,9 +23,15 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               {user ? (
                 <>
                   {user.role === "owner" ? (
-                    <Link href="/dashboard" className="hover:text-emerald-700">My listings</Link>
+                    <>
+                      <Link href="/dashboard" className="hover:text-emerald-700">My listings</Link>
+                      <Link href="/dashboard/applications" className="hover:text-emerald-700">Applications</Link>
+                    </>
                   ) : (
-                    <Link href="/owners" className="hover:text-emerald-700">List your property</Link>
+                    <>
+                      <Link href="/applications" className="hover:text-emerald-700">My applications</Link>
+                      <Link href="/owners" className="hover:text-emerald-700">List your property</Link>
+                    </>
                   )}
                   <span className="text-slate-500">Hi, {user.name.split(" ")[0]}</span>
                   <LogoutButton />

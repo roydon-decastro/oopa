@@ -1,5 +1,6 @@
 // End-to-end check of the owner flow. Run against a running app: BASE=http://localhost:3000 node tests/owner-flow.e2e.cjs
 // Needs test images; set PHOTOS to three comma-separated JPG paths.
+// Note: Better Auth rate-limits sign-ups (3 per 10s per IP), so leave ~10s between test runs.
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium } = require('playwright');
 (async () => {

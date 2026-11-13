@@ -1,4 +1,5 @@
 import AuthForm from "@/components/AuthForm";
+import { safeNext } from "@/lib/status";
 
 export const metadata = { title: "Log in · Oopa" };
 
@@ -7,7 +8,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <main className="mx-auto max-w-md px-4 py-16">
       <h1 className="mb-6 text-2xl font-bold">Log in</h1>
-      <AuthForm mode="login" next={next?.startsWith("/") ? next : undefined} />
+      <AuthForm mode="login" next={safeNext(next)} />
     </main>
   );
 }

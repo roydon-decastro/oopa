@@ -1,6 +1,6 @@
 export const PROPERTY_TYPES = [
   ["condo", "Condo"], ["apartment", "Apartment"], ["house", "House"], ["townhouse", "Townhouse"],
-  ["room", "Room"], ["bedspace", "Bedspace"], ["commercial", "Commercial"],
+  ["room", "Room"], ["bedspace", "Bedspace / dorm"], ["commercial", "Commercial"],
 ] as const;
 
 export const FURNISHING = [["unfurnished", "Unfurnished"], ["semi", "Semi-furnished"], ["fully", "Fully furnished"]] as const;

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { application, property, user as userTable } from "@/db/schema";
 import { isPublicListing } from "@/lib/visibility";
+import { statusForBeds } from "@/lib/dorm";
 import { sendEmail } from "@/lib/email";
 import { formatPHP } from "@/lib/format";
 import { requireOwner, requireUser } from "@/lib/session";
@@ -79,6 +80,15 @@ export async function decideApplication(id: string, status: "reviewing" | "appro
   if (!row || row.property.ownerId !== user.id) throw new Error("Application not found.");
   if (row.status === "withdrawn") throw new Error("The renter withdrew this application.");
   await db.update(application).set({ status }).where(eq(application.id, id));
+  // Per-bed rooms: approving a renter takes a bed; un-approving gives it back.
+  const p = row.property;
+  if (p.bedsTotal != null && (status === "approved") !== (row.status === "approved")) {
+    const bedsTaken = Math.min(p.bedsTotal, Math.max(0, p.bedsTaken + (status === "approved" ? 1 : -1)));
+    await db.update(property).set({ bedsTaken, status: statusForBeds(p.status, { bedsTotal: p.bedsTotal, bedsTaken }) })
+      .where(eq(property.id, p.id));
+    revalidatePath(`/listings/${p.id}`);
+    if (p.buildingId) revalidatePath(`/dashboard/buildings/${p.buildingId}`);
+  }
   if (status !== "reviewing" && status !== row.status) {
     after(async () => {
       const renter = await db.query.user.findFirst({ where: eq(userTable.id, row.renterId) });

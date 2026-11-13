@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { db } from "@/db";
 import { building, buildingPhoto, property, propertyPhoto } from "@/db/schema";
 import { publicListing } from "@/lib/visibility";
+import { GENDER_LABEL, bedsLeft } from "@/lib/dorm";
 import { getSession } from "@/lib/session";
 import { formatPHP } from "@/lib/format";
 import { describeTerms, effectiveTerms } from "@/lib/utilities";
@@ -32,7 +33,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!b || b.owner.suspendedAt) return { title: "Building not found · Oopa" };
   const from = b.units.length ? ` from ${formatPHP(Math.min(...b.units.map((u) => u.monthlyRentPhp)))}/mo` : "";
   return {
-    title: `${b.name}, ${b.city}: units for rent${from} · Oopa`,
+    title: `${b.name}, ${b.city}: ${b.isDormitory ? "dorm beds" : "units"} for rent${from} · Oopa`,
     description: b.description.slice(0, 160),
     openGraph: { images: b.photos[0] ? [b.photos[0].url] : [] },
   };
@@ -45,6 +46,9 @@ export default async function BuildingPage({ params }: { params: Promise<{ id: s
   const isOwner = session?.user.id === b.ownerId;
   const total = await db.$count(property, and(eq(property.buildingId, b.id)));
   if (!isOwner && b.units.length === 0 && total === 0) notFound();
+  const dorm = b.isDormitory;
+  const word = dorm ? "room" : "unit";
+  const freeBeds = b.units.reduce((n, u) => n + (bedsLeft(u) ?? 0), 0);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
@@ -61,27 +65,29 @@ export default async function BuildingPage({ params }: { params: Promise<{ id: s
 
       <h1 className="mt-6 text-3xl font-bold">{b.name}</h1>
       <p className="mt-1 text-slate-600">{[b.street, b.barangay, b.city, b.province].filter(Boolean).join(", ")}</p>
-      <p className="mt-1 text-sm text-slate-500">{b.floors} floor{b.floors > 1 ? "s" : ""} · {total} units · managed by {b.owner.name}</p>
+      <p className="mt-1 text-sm text-slate-500">{b.floors} floor{b.floors > 1 ? "s" : ""} · {total} {word}s · managed by {b.owner.name}</p>
 
       <div className="mt-8 grid gap-10 lg:grid-cols-3">
         <section className="lg:col-span-2">
           <h2 className="text-xl font-semibold">
-            {b.units.length ? `${b.units.length} unit${b.units.length > 1 ? "s" : ""} available` : "No units available right now"}
+            {dorm
+              ? (freeBeds ? `${freeBeds} bed${freeBeds > 1 ? "s" : ""} available in ${b.units.length} room${b.units.length > 1 ? "s" : ""}` : "No beds available right now")
+              : (b.units.length ? `${b.units.length} unit${b.units.length > 1 ? "s" : ""} available` : "No units available right now")}
           </h2>
           {b.units.length > 0 && (
             <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-slate-600">
-                  <tr><th className="p-3">Unit</th><th className="p-3">Floor</th><th className="p-3">Layout</th><th className="hidden p-3 sm:table-cell">Size</th><th className="p-3">Rent</th><th className="p-3"></th></tr>
+                  <tr><th className="p-3">{dorm ? "Room" : "Unit"}</th><th className="p-3">Floor</th><th className="p-3">{dorm ? "Beds" : "Layout"}</th><th className="hidden p-3 sm:table-cell">Size</th><th className="p-3">Rent</th><th className="p-3"></th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {b.units.map((u) => (
                     <tr key={u.id}>
                       <td className="p-3 font-semibold">{u.unitLabel}</td>
                       <td className="p-3">{u.floor}</td>
-                      <td className="p-3">{u.bedrooms === 0 ? "Studio" : `${u.bedrooms} BR`} · {u.bathrooms} bath</td>
+                      <td className="p-3">{u.bedsTotal != null ? `${bedsLeft(u)} of ${u.bedsTotal} free` : `${u.bedrooms === 0 ? "Studio" : `${u.bedrooms} BR`} · ${u.bathrooms} bath`}</td>
                       <td className="hidden p-3 sm:table-cell">{u.floorAreaSqm ? `${u.floorAreaSqm} sqm` : "—"}</td>
-                      <td className="p-3 font-medium text-emerald-800">{formatPHP(u.monthlyRentPhp)}</td>
+                      <td className="p-3 font-medium text-emerald-800">{formatPHP(u.monthlyRentPhp)}{u.bedsTotal != null && <span className="font-normal text-slate-500">/bed</span>}</td>
                       <td className="p-3 text-right"><Link href={`/listings/${u.id}`} className="btn px-3 py-1.5 text-sm">View & apply</Link></td>
                     </tr>
                   ))}
@@ -97,6 +103,16 @@ export default async function BuildingPage({ params }: { params: Promise<{ id: s
           )}
         </section>
         <aside className="h-fit space-y-6 rounded-2xl border border-slate-200 p-6">
+          {(b.genderPolicy || b.curfew || b.houseRules) && (
+            <div>
+              <h2 className="font-semibold">House rules</h2>
+              <dl className="mt-2 space-y-1 text-sm text-slate-700">
+                {b.genderPolicy && <div><dt className="inline font-medium">For: </dt><dd className="inline">{GENDER_LABEL[b.genderPolicy]}</dd></div>}
+                {b.curfew && <div><dt className="inline font-medium">Curfew: </dt><dd className="inline">{b.curfew}</dd></div>}
+              </dl>
+              {b.houseRules && <p className="mt-2 whitespace-pre-line text-sm text-slate-700">{b.houseRules}</p>}
+            </div>
+          )}
           <div>
             <h2 className="font-semibold">Utilities</h2>
             <dl className="mt-2 space-y-1 text-sm text-slate-700">

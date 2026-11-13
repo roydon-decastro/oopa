@@ -12,6 +12,7 @@ import { uploadPhoto, deletePhoto as removeFile } from "@/lib/storage";
 import { checkPhotos, photosFrom } from "@/lib/photos";
 import { parseUtilities } from "@/lib/utility-input";
 import { auth } from "@/lib/auth";
+import { parseBeds, parseRules, statusForBeds } from "@/lib/dorm";
 
 export type FormState = { error?: string } | undefined;
 
@@ -77,10 +78,14 @@ export async function createProperty(_prev: FormState, formData: FormData): Prom
   const photoErr = checkPhotos(files);
   if (photoErr) return { error: photoErr };
 
+  const beds = parseBeds(formData, parsed.data.type);
+  if ("error" in beds) return { error: beds.error };
+  const rules = parseRules(formData);
+
   const publish = formData.get("intent") === "publish";
   const [row] = await db
     .insert(property)
-    .values({ ...parsed.data, ...util.data, ownerId: me.id, status: publish ? "active" : "draft" })
+    .values({ ...parsed.data, ...util.data, ...beds, ...rules, ownerId: me.id, status: statusForBeds(publish ? "active" : "draft", beds) })
     .returning({ id: property.id });
   await savePhotos(row.id, me.id, files);
   revalidatePath("/dashboard");
@@ -119,9 +124,13 @@ export async function updateProperty(id: string, _prev: FormState, formData: For
   const photoErr = checkPhotos(files, existing.photos.length);
   if (photoErr) return { error: photoErr };
 
+  const beds = parseBeds(formData, parsed.data.type);
+  if ("error" in beds) return { error: beds.error };
+  const rules = parseRules(formData);
+
   const intent = formData.get("intent");
-  const status = intent === "publish" ? "active" : intent === "draft" ? "draft" : existing.status;
-  await db.update(property).set({ ...parsed.data, ...util.data, ...unitFields, status }).where(eq(property.id, id));
+  const status = statusForBeds(intent === "publish" ? "active" : intent === "draft" ? "draft" : existing.status, beds);
+  await db.update(property).set({ ...parsed.data, ...util.data, ...unitFields, ...beds, ...rules, status }).where(eq(property.id, id));
   await savePhotos(id, me.id, files);
   revalidatePath("/dashboard");
   revalidatePath(`/listings/${id}`);
@@ -134,9 +143,30 @@ export async function updateProperty(id: string, _prev: FormState, formData: For
 
 export async function setStatus(id: string, status: "draft" | "active" | "rented" | "archived") {
   const { user: me } = await requireOwner();
-  await ownedProperty(id, me.id);
-  await db.update(property).set({ status }).where(eq(property.id, id));
+  const row = await ownedProperty(id, me.id);
+  if (row.bedsTotal != null) {
+    // Per-bed rooms: "Mark rented" fills every bed; relisting a full room frees them all.
+    const bedsTaken = status === "rented" ? row.bedsTotal
+      : status === "active" && row.bedsTaken >= row.bedsTotal ? 0 : row.bedsTaken;
+    await db.update(property).set({ bedsTaken, status: statusForBeds(status, { bedsTotal: row.bedsTotal, bedsTaken }) })
+      .where(eq(property.id, id));
+  } else {
+    await db.update(property).set({ status }).where(eq(property.id, id));
+  }
   revalidatePath("/dashboard");
+}
+
+/** One bed more (+1) or less (-1) taken in a per-bed room. Publishes or hides the room as it fills up or frees up. */
+export async function adjustBeds(id: string, delta: 1 | -1) {
+  const { user: me } = await requireOwner();
+  const row = await ownedProperty(id, me.id);
+  if (row.bedsTotal == null) return;
+  const bedsTaken = Math.min(row.bedsTotal, Math.max(0, row.bedsTaken + delta));
+  await db.update(property).set({ bedsTaken, status: statusForBeds(row.status, { bedsTotal: row.bedsTotal, bedsTaken }) })
+    .where(eq(property.id, id));
+  revalidatePath("/dashboard");
+  revalidatePath(`/listings/${id}`);
+  if (row.buildingId) revalidatePath(`/dashboard/buildings/${row.buildingId}`);
 }
 
 export async function deleteProperty(id: string) {

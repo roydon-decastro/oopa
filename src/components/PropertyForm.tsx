@@ -6,6 +6,7 @@ import type { FormState } from "@/app/dashboard/actions";
 import { AMENITIES, FURNISHING, PROPERTY_TYPES, PROVINCES } from "@/lib/ph";
 import UtilityFields from "./UtilityFields";
 import type { Utility } from "@/lib/utilities";
+import { GENDER_OPTIONS } from "@/lib/dorm";
 
 type Props = {
   action: (prev: FormState, formData: FormData) => Promise<FormState>;
@@ -21,13 +22,16 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0, 
   const [state, formAction, pending] = useActionState(action, undefined);
   const [previews, setPreviews] = useState<string[]>([]);
   const p = initial;
+  const [type, setType] = useState<string>(p?.type ?? "condo");
+  const perBed = type === "bedspace";
+  const showRules = perBed || type === "room";
 
   return (
     <form action={formAction} className="space-y-8">
       <Section title="Basics">
         {buildingName ? (
           <>
-            <Field label="Unit number">
+            <Field label={perBed ? "Room number" : "Unit number"}>
               <input className="input" name="unitLabel" required maxLength={20} defaultValue={p?.unitLabel ?? ""} />
             </Field>
             <Field label="Floor">
@@ -41,7 +45,7 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0, 
           </Field>
         )}
         <Field label="Property type">
-          <select className="input" name="type" defaultValue={p?.type ?? "condo"}>
+          <select className="input" name="type" value={type} onChange={(e) => setType(e.target.value)}>
             {PROPERTY_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </Field>
@@ -58,9 +62,9 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0, 
       </Section>
 
       <Section title="Rent and terms">
-        <Field label="Monthly rent (₱)">
+        <Field label={perBed ? "Rent per bed, per month (₱)" : "Monthly rent (₱)"}>
           <input className="input" name="monthlyRentPhp" type="number" min={1} step="1" required
-            defaultValue={p?.monthlyRentPhp} placeholder="25000" />
+            defaultValue={p?.monthlyRentPhp} placeholder={perBed ? "3000" : "25000"} />
         </Field>
         <Field label="Minimum lease (months)">
           <input className="input" name="minLeaseMonths" type="number" min={1} max={120} defaultValue={p?.minLeaseMonths ?? 12} />
@@ -79,6 +83,38 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0, 
           Pets allowed
         </label>
       </Section>
+
+      {showRules && (
+        <Section title={perBed ? "Beds and house rules" : "House rules"}>
+          {perBed && (
+            <>
+              <Field label="Beds in this room">
+                <input className="input" name="bedsTotal" type="number" min={1} max={50} required defaultValue={p?.bedsTotal ?? 4} />
+              </Field>
+              <Field label="Beds already taken">
+                <input className="input" name="bedsTaken" type="number" min={0} max={50} defaultValue={p?.bedsTaken ?? 0} />
+              </Field>
+              <p className="-mt-2 text-xs text-slate-500 sm:col-span-2">
+                Renters apply for one bed. Each time you approve an application, one more bed is marked taken. When every bed is taken the room stops showing in search.
+              </p>
+            </>
+          )}
+          <Field label="Who can stay">
+            <select className="input" name="genderPolicy" defaultValue={p?.genderPolicy ?? ""}>
+              <option value="">{buildingName ? "Same as building" : "Not specified"}</option>
+              {GENDER_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </Field>
+          <Field label="Curfew">
+            <input className="input" name="curfew" maxLength={40} defaultValue={p?.curfew ?? ""}
+              placeholder={buildingName ? "Leave blank to use the building's" : "e.g. 10:00 PM, or None"} />
+          </Field>
+          <Field label="House rules" className="sm:col-span-2">
+            <textarea className="input min-h-24" name="houseRules" maxLength={2000} defaultValue={p?.houseRules ?? ""}
+              placeholder={buildingName ? "Leave blank to use the building's rules" : "e.g. No visitors after 8 PM. No cooking in rooms. Lights out at 11 PM."} />
+          </Field>
+        </Section>
+      )}
 
       <Section title="Size">
         <Field label="Bedrooms (0 for studio)">

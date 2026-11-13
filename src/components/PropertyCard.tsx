@@ -16,15 +16,18 @@ export type CardProperty = {
   city: string;
   province: string;
   photos: { url: string }[];
+  unitLabel?: string | null;
+  building?: { name: string; photos: { url: string }[] } | null;
 };
 
 export default function PropertyCard({ p }: { p: CardProperty }) {
+  const cover = p.photos[0] ?? p.building?.photos[0];
   return (
     <Link href={`/listings/${p.id}`} className="group block overflow-hidden rounded-xl border border-slate-200 hover:shadow-md">
       <div className="aspect-[4/3] bg-slate-100">
-        {p.photos[0] ? (
+        {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={p.photos[0].url} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
+          <img src={cover.url} alt="" className="h-full w-full object-cover transition group-hover:scale-[1.02]" />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-slate-400">No photo yet</div>
         )}

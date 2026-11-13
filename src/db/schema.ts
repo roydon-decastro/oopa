@@ -91,11 +91,50 @@ export const applicationStatus = pgEnum("application_status", [
   "submitted", "reviewing", "approved", "rejected", "withdrawn",
 ]);
 
+// A multi-unit building (apartment building, dormitory, etc). Each unit is a `property` row with buildingId set.
+export const building = pgTable(
+  "building",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description").notNull().default(""),
+    floors: smallint("floors").notNull().default(1),
+    street: text("street"),
+    barangay: text("barangay"),
+    city: text("city").notNull(),
+    province: text("province").notNull(),
+    region: text("region"),
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    amenities: text("amenities").array().notNull().default([]),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+  },
+  (t) => [index("building_owner_idx").on(t.ownerId)],
+);
+
+export const buildingPhoto = pgTable(
+  "building_photo",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    buildingId: uuid("building_id").notNull().references(() => building.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    position: smallint("position").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [index("building_photo_building_idx").on(t.buildingId, t.position)],
+);
+
+// A rentable unit: either a standalone property (house, condo) or a unit inside a building.
 export const property = pgTable(
   "property",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     ownerId: text("owner_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    buildingId: uuid("building_id").references(() => building.id, { onDelete: "cascade" }),
+    unitLabel: text("unit_label"),
+    floor: smallint("floor"),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
     type: propertyType("type").notNull(),
@@ -125,6 +164,8 @@ export const property = pgTable(
   (t) => [
     index("property_search_idx").on(t.status, t.city, t.type, t.monthlyRentPhp),
     index("property_owner_idx").on(t.ownerId),
+    index("property_building_idx").on(t.buildingId, t.floor),
+    unique("property_building_unit_uq").on(t.buildingId, t.unitLabel),
   ],
 );
 
@@ -170,6 +211,7 @@ export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
   properties: many(property),
+  buildings: many(building),
   applications: many(application),
 }));
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -178,8 +220,17 @@ export const sessionRelations = relations(session, ({ one }) => ({
 export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, { fields: [account.userId], references: [user.id] }),
 }));
+export const buildingRelations = relations(building, ({ one, many }) => ({
+  owner: one(user, { fields: [building.ownerId], references: [user.id] }),
+  photos: many(buildingPhoto),
+  units: many(property),
+}));
+export const buildingPhotoRelations = relations(buildingPhoto, ({ one }) => ({
+  building: one(building, { fields: [buildingPhoto.buildingId], references: [building.id] }),
+}));
 export const propertyRelations = relations(property, ({ one, many }) => ({
   owner: one(user, { fields: [property.ownerId], references: [user.id] }),
+  building: one(building, { fields: [property.buildingId], references: [building.id] }),
   photos: many(propertyPhoto),
   applications: many(application),
 }));
@@ -192,5 +243,6 @@ export const applicationRelations = relations(application, ({ one }) => ({
 }));
 
 export type Property = typeof property.$inferSelect;
+export type Building = typeof building.$inferSelect;
 export type Application = typeof application.$inferSelect;
 export type User = typeof user.$inferSelect;

@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { property, propertyPhoto } from "@/db/schema";
 import PropertyForm from "@/components/PropertyForm";
 import PhotoManager from "@/components/PhotoManager";
-import { updateProperty } from "@/app/dashboard/actions";
+import { deletePhotos, updateProperty } from "@/app/dashboard/actions";
 import { requireOwner } from "@/lib/session";
 
 export const metadata = { title: "Edit property · Oopa" };
@@ -16,16 +16,20 @@ export default async function EditPropertyPage({ params }: { params: Promise<{ i
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const row = await db.query.property.findFirst({
     where: and(eq(property.id, id), eq(property.ownerId, user.id)),
-    with: { photos: { orderBy: asc(propertyPhoto.position) } },
+    with: { photos: { orderBy: asc(propertyPhoto.position) }, building: { columns: { id: true, name: true } } },
   });
   if (!row) notFound();
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <Link href="/dashboard" className="text-sm text-slate-500 hover:text-emerald-700">← My listings</Link>
-      <h1 className="mb-8 mt-2 text-3xl font-bold">Edit property</h1>
-      {row.photos.length > 0 && <PhotoManager propertyId={row.id} photos={row.photos} />}
-      <PropertyForm action={updateProperty.bind(null, row.id)} initial={row} existingPhotoCount={row.photos.length} />
+      {row.building ? (
+        <Link href={`/dashboard/buildings/${row.building.id}`} className="text-sm text-slate-500 hover:text-emerald-700">← {row.building.name}</Link>
+      ) : (
+        <Link href="/dashboard" className="text-sm text-slate-500 hover:text-emerald-700">← My listings</Link>
+      )}
+      <h1 className="mb-8 mt-2 text-3xl font-bold">{row.building ? `Edit unit ${row.unitLabel}` : "Edit property"}</h1>
+      {row.photos.length > 0 && <PhotoManager photos={row.photos} onDelete={deletePhotos.bind(null, row.id)} />}
+      <PropertyForm action={updateProperty.bind(null, row.id)} initial={row} existingPhotoCount={row.photos.length} buildingName={row.building?.name} />
     </main>
   );
 }

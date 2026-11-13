@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { and, asc, count, desc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
 import { db } from "@/db";
-import { property, propertyPhoto } from "@/db/schema";
+import { buildingPhoto, property, propertyPhoto } from "@/db/schema";
 import PropertyCard from "@/components/PropertyCard";
 import { PROPERTY_TYPES } from "@/lib/ph";
 
@@ -40,7 +40,10 @@ export default async function ListingsPage({ searchParams }: { searchParams: Pro
       orderBy: sort,
       limit: PAGE_SIZE,
       offset: (page - 1) * PAGE_SIZE,
-      with: { photos: { orderBy: asc(propertyPhoto.position), limit: 1, columns: { url: true } } },
+      with: {
+        photos: { orderBy: asc(propertyPhoto.position), limit: 1, columns: { url: true } },
+        building: { columns: { name: true }, with: { photos: { orderBy: asc(buildingPhoto.position), limit: 1, columns: { url: true } } } },
+      },
     }),
     db.select({ total: count() }).from(property).where(filter),
   ]);

@@ -20,6 +20,7 @@ Changing the schema: edit `src/db/schema.ts`, run `npm run db:generate`, then `n
 
 - `user`, `session`, `account`, `verification`: Better Auth tables. `user.role` is `owner` or `renter`.
 - `property`: listings with rent in PHP, deposit/advance months, PH address (barangay, city, province).
+- `building`, `building_photo`: multi-unit buildings. Each unit is a `property` row with `building_id`, `unit_label` and `floor`; units inherit the building's address, photos and amenities.
 - `property_photo`: photo URLs. Uploads go to Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set, otherwise to `./.uploads` for local development.
 - `application`: a renter's application to a property; owners approve or reject.
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { and, asc, count, desc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { buildingPhoto, property, propertyPhoto } from "@/db/schema";
+import { publicListing } from "@/lib/visibility";
 import PropertyCard from "@/components/PropertyCard";
 import { PROPERTY_TYPES } from "@/lib/ph";
 
@@ -21,7 +22,7 @@ const num = (v?: string) => (v && !isNaN(Number(v)) ? Number(v) : undefined);
 export default async function ListingsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
   const page = Math.max(1, num(sp.page) ?? 1);
-  const where: SQL[] = [eq(property.status, "active")];
+  const where: SQL[] = [publicListing()];
   const q = sp.city?.trim();
   if (q) {
     const like = `%${q.replace(/[%_]/g, "")}%`;

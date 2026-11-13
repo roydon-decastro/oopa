@@ -25,6 +25,7 @@ export default async function BuildingDashboard({
   if (!b) notFound();
   const units = b.units.map((u) => ({
     id: u.id, unitLabel: u.unitLabel, floor: u.floor, status: u.status, monthlyRentPhp: u.monthlyRentPhp, bedrooms: u.bedrooms,
+    removed: !!u.removedAt,
     pending: u.applications.filter((a) => a.status === "submitted").length,
   }));
 

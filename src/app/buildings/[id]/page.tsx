@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { db } from "@/db";
 import { building, buildingPhoto, property, propertyPhoto } from "@/db/schema";
+import { publicListing } from "@/lib/visibility";
 import { getSession } from "@/lib/session";
 import { formatPHP } from "@/lib/format";
 import { describeTerms, effectiveTerms } from "@/lib/utilities";
@@ -16,9 +17,9 @@ async function load(id: string) {
     where: eq(building.id, id),
     with: {
       photos: { orderBy: asc(buildingPhoto.position) },
-      owner: { columns: { name: true } },
+      owner: { columns: { name: true, suspendedAt: true } },
       units: {
-        where: eq(property.status, "active"),
+        where: publicListing(),
         orderBy: [asc(property.floor), asc(property.unitLabel)],
         with: { photos: { orderBy: asc(propertyPhoto.position), limit: 1 } },
       },
@@ -28,7 +29,7 @@ async function load(id: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const b = await load((await params).id);
-  if (!b) return { title: "Building not found · Oopa" };
+  if (!b || b.owner.suspendedAt) return { title: "Building not found · Oopa" };
   const from = b.units.length ? ` from ${formatPHP(Math.min(...b.units.map((u) => u.monthlyRentPhp)))}/mo` : "";
   return {
     title: `${b.name}, ${b.city}: units for rent${from} · Oopa`,
@@ -40,7 +41,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function BuildingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const [b, session] = await Promise.all([load(id), getSession()]);
-  if (!b) notFound();
+  if (!b || b.owner.suspendedAt) notFound();
   const isOwner = session?.user.id === b.ownerId;
   const total = await db.$count(property, and(eq(property.buildingId, b.id)));
   if (!isOwner && b.units.length === 0 && total === 0) notFound();

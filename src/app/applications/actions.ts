@@ -7,6 +7,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { application, property, user as userTable } from "@/db/schema";
+import { isPublicListing } from "@/lib/visibility";
 import { sendEmail } from "@/lib/email";
 import { formatPHP } from "@/lib/format";
 import { requireOwner, requireUser } from "@/lib/session";
@@ -28,7 +29,7 @@ export async function applyToProperty(propertyId: string, _prev: ApplyState, for
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const listing = await db.query.property.findFirst({ where: eq(property.id, propertyId) });
-  if (!listing || listing.status !== "active") return { error: "This listing is no longer accepting applications." };
+  if (!listing || !isPublicListing(listing)) return { error: "This listing is no longer accepting applications." };
   if (listing.ownerId === user.id) return { error: "You can't apply to your own listing." };
 
   const existing = await db.query.application.findFirst({

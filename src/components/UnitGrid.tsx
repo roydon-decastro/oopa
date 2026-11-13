@@ -10,6 +10,7 @@ type Unit = {
   unitLabel: string | null;
   floor: number | null;
   status: "draft" | "active" | "rented" | "archived";
+  removed?: boolean;
   monthlyRentPhp: number;
   bedrooms: number;
   pending: number;
@@ -91,7 +92,7 @@ export default function UnitGrid({ buildingId, units }: { buildingId: string; un
                     checked={selected.includes(u.id)} onChange={() => toggle(u.id)} />
                   <Link href={`/dashboard/properties/${u.id}/edit`} className="block">
                     <p className="text-lg font-bold">{u.unitLabel}</p>
-                    <p className="text-xs font-medium text-slate-600">{LABEL[u.status]}</p>
+                    <p className="text-xs font-medium text-slate-600">{u.removed ? "Taken down by Oopa" : LABEL[u.status]}</p>
                     <p className="mt-1 text-sm">{formatPHP(u.monthlyRentPhp)}</p>
                     <p className="text-xs text-slate-500">{u.bedrooms === 0 ? "Studio" : `${u.bedrooms} BR`}</p>
                   </Link>

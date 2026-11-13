@@ -110,6 +110,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[l.status]}`}>
                     {STATUS_LABEL[l.status]}
                   </span>
+                  {l.removedAt && (
+                    <Link href={`/dashboard/properties/${l.id}/edit`} className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800 hover:underline">
+                      Taken down by Oopa · see why
+                    </Link>
+                  )}
                   <Link href={`/dashboard/applications?property=${l.id}`} className="text-xs text-slate-500 underline hover:text-emerald-700">
                     {l.applications.length} application{l.applications.length === 1 ? "" : "s"}
                   </Link>

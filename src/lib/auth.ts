@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { captcha } from "better-auth/plugins";
 import { APIError } from "better-auth/api";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
@@ -41,7 +42,21 @@ export const auth = betterAuth({
       },
     },
   },
-  plugins: [nextCookies()],
+  plugins: [
+    // Cloudflare Turnstile bot check on sign-up. Only on when both keys are set in Vercel,
+    // so a half-finished setup can't lock everyone out.
+    ...(process.env.TURNSTILE_SECRET_KEY && process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+      ? [captcha({
+          provider: "cloudflare-turnstile",
+          secretKey: process.env.TURNSTILE_SECRET_KEY,
+          endpoints: ["/sign-up/email"],
+          expectedAction: "signup",
+          // Only for automated tests: point verification at a local stand-in.
+          siteVerifyURLOverride: process.env.TURNSTILE_VERIFY_URL || undefined,
+        })]
+      : []),
+    nextCookies(),
+  ],
 });
 
 export type Session = typeof auth.$Infer.Session;

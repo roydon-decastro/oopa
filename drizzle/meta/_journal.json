@@ -22,6 +22,13 @@
       "when": 1794585205096,
       "tag": "0002_utilities",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794587143748,
+      "tag": "0003_admin",
+      "breakpoints": true
     }
   ]
 }

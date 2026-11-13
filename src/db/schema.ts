@@ -19,6 +19,8 @@ export const user = pgTable("user", {
     .notNull(),
   role: text("role").default("renter"),
   phone: text("phone"),
+  // Set by a site admin. A suspended user can't log in and their listings are taken down.
+  suspendedAt: timestamp("suspended_at"),
 });
 
 export const session = pgTable(
@@ -184,6 +186,9 @@ export const property = pgTable(
     ...utilityColumns(),
     electricMeterNo: text("electric_meter_no"),
     waterMeterNo: text("water_meter_no"),
+    // Set when a site admin takes the listing down. The owner can't republish it until an admin restores it.
+    removedAt: timestamp("removed_at"),
+    removedReason: text("removed_reason"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
   },

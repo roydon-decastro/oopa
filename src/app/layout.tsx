@@ -4,6 +4,7 @@ import "./globals.css";
 import { getSession } from "@/lib/session";
 import LogoutButton from "@/components/LogoutButton";
 import { SITE_URL } from "@/lib/site";
+import { isAdmin } from "@/lib/admin";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -38,6 +39,9 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                       <Link href="/applications" className="hover:text-emerald-700">My applications</Link>
                       <Link href="/owners" className="hover:text-emerald-700">List your property</Link>
                     </>
+                  )}
+                  {isAdmin(user.email) && (
+                    <Link href="/admin" className="rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white hover:bg-slate-700">Admin</Link>
                   )}
                   <span className="text-slate-500">Hi, {user.name.split(" ")[0]}</span>
                   <LogoutButton />

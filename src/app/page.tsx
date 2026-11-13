@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc } from "drizzle-orm";
 import { db } from "@/db";
 import { buildingPhoto, property, propertyPhoto } from "@/db/schema";
+import { publicListing } from "@/lib/visibility";
 import PropertyCard from "@/components/PropertyCard";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +12,7 @@ const cities = ["Makati", "Taguig", "Quezon City", "Pasig", "Manila", "Cebu City
 async function latest() {
   if (!process.env.DATABASE_URL) return [];
   return db.query.property.findMany({
-    where: eq(property.status, "active"),
+    where: publicListing(),
     orderBy: desc(property.createdAt),
     limit: 6,
     with: {

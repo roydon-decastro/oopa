@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { property } from "@/db/schema";
+import { publicListing } from "@/lib/visibility";
 import { SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
   if (!process.env.DATABASE_URL) return fixed;
   const listings = await db.select({ id: property.id, updatedAt: property.updatedAt, buildingId: property.buildingId })
-    .from(property).where(eq(property.status, "active"));
+    .from(property).where(publicListing());
   const buildings = [...new Set(listings.map((l) => l.buildingId).filter(Boolean))] as string[];
   return [
     ...fixed,

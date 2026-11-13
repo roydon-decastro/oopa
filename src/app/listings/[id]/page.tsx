@@ -4,6 +4,8 @@ import { and, asc, eq } from "drizzle-orm";
 import type { Metadata } from "next";
 import { db } from "@/db";
 import { application, buildingPhoto, property, propertyPhoto } from "@/db/schema";
+import { isPublicListing } from "@/lib/visibility";
+import { isAdmin } from "@/lib/admin";
 import { getSession } from "@/lib/session";
 import { formatPHP } from "@/lib/format";
 import { FURNISHING, PROPERTY_TYPES } from "@/lib/ph";
@@ -29,7 +31,7 @@ async function load(id: string) {
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const p = await load((await params).id);
-  if (!p || p.status !== "active") return { title: "Listing not found · Oopa" };
+  if (!p || !isPublicListing(p)) return { title: "Listing not found · Oopa" };
   return {
     title: `${p.title} · ${formatPHP(p.monthlyRentPhp)}/mo · Oopa`,
     description: p.description.slice(0, 160),
@@ -41,7 +43,8 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const [p, session] = await Promise.all([load(id), getSession()]);
   const isOwner = session?.user.id === p?.ownerId;
-  if (!p || (p.status !== "active" && !isOwner)) notFound();
+  const admin = isAdmin(session?.user.email);
+  if (!p || (!isPublicListing(p) && !isOwner && !admin)) notFound();
 
   const myApp = session
     ? await db.query.application.findFirst({
@@ -72,9 +75,13 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   return (
     <main className="mx-auto max-w-6xl px-4 py-8">
       <Link href="/listings" className="text-sm text-slate-500 hover:text-emerald-700">← All rentals</Link>
-      {p.status !== "active" && (
+      {p.removedAt ? (
+        <p className="mt-4 rounded-md bg-red-50 px-4 py-2 text-sm text-red-800">
+          This listing was taken down by Oopa and is hidden from renters.{p.removedReason ? ` Reason: ${p.removedReason}` : ""}
+        </p>
+      ) : p.status !== "active" && (
         <p className="mt-4 rounded-md bg-amber-50 px-4 py-2 text-sm text-amber-800">
-          Only you can see this listing because it isn&apos;t published.
+          {isOwner ? "Only you can see this listing because it isn\u2019t published." : "This listing isn\u2019t published, so renters can\u2019t see it."}
         </p>
       )}
 
@@ -166,7 +173,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                 You applied on {myApp.createdAt.toLocaleDateString("en-PH", { dateStyle: "medium" })}.{" "}
                 <Link href="/applications" className="underline">Track your application</Link>
               </div>
-            ) : p.status !== "active" ? null : (
+            ) : !isPublicListing(p) ? null : (
               <>
                 <h2 className="mb-3 font-semibold">Apply for this place</h2>
                 <ApplyForm action={applyToProperty.bind(null, p.id)} minLease={p.minLeaseMonths} />

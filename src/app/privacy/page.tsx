@@ -35,7 +35,7 @@ export default function Privacy() {
       <ul>
         <li><strong>The public</strong> sees published listings, including the owner&apos;s display name, but not the owner&apos;s email or phone number.</li>
         <li><strong>An owner</strong> sees the applications sent to their own properties. A renter&apos;s email and mobile number are only shown once the owner reviews or approves the application.</li>
-        <li><strong>Service providers</strong> that host and run the site for us, under data processing terms: Vercel (web hosting and photo storage), Neon (database) and our email provider. Some of these store data outside the Philippines; we use providers with appropriate safeguards as required by the Data Privacy Act.</li>
+        <li><strong>Service providers</strong> that host and run the site for us, under data processing terms: Vercel (web hosting and photo storage), Neon (database), Cloudflare (a bot check on the sign-up page, which sees your IP address and browser details) and our email provider. Some of these store data outside the Philippines; we use providers with appropriate safeguards as required by the Data Privacy Act.</li>
         <li><strong>Authorities</strong>, when required by law or a lawful order.</li>
       </ul>
 

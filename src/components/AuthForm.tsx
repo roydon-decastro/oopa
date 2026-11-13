@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import Turnstile, { TURNSTILE_SITE_KEY, type TurnstileHandle } from "./Turnstile";
 
 export default function AuthForm({
   mode,
@@ -18,6 +19,10 @@ export default function AuthForm({
   const [role, setRole] = useState(defaultRole);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Bot check on sign-up only. Without a site key configured, there's no check.
+  const needsCaptcha = mode === "signup" && !!TURNSTILE_SITE_KEY;
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captcha = useRef<TurnstileHandle>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,11 +39,16 @@ export default function AuthForm({
             name: String(f.get("name")),
             phone: String(f.get("phone") || "") || undefined,
             role,
-          })
+          }, captchaToken ? { headers: { "x-captcha-response": captchaToken } } : undefined)
         : await authClient.signIn.email({ email, password });
     setLoading(false);
     if (res.error) {
-      setError(res.error.message ?? "Something went wrong. Please try again.");
+      // A captcha token only works once, so get a fresh one for the next try.
+      if (needsCaptcha) captcha.current?.reset();
+      const msg = res.error.message ?? "";
+      setError(/captcha/i.test(msg)
+        ? "The security check didn't go through. Please wait for the check box to turn green, then try again."
+        : msg || "Something went wrong. Please try again.");
       return;
     }
     const target = next || (mode === "signup" ? (role === "owner" ? "/dashboard" : "/listings") : "/dashboard");
@@ -99,9 +109,13 @@ export default function AuthForm({
           </span>
         </label>
       )}
+      {needsCaptcha && (
+        <Turnstile ref={captcha} onToken={setCaptchaToken}
+          onError={() => setError("We couldn't load the security check. Check your connection and refresh the page.")} />
+      )}
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-      <button className="btn w-full" disabled={loading}>
-        {loading ? "Please wait…" : mode === "signup" ? "Create account" : "Log in"}
+      <button className="btn w-full" disabled={loading || (needsCaptcha && !captchaToken)}>
+        {loading ? "Please wait…" : needsCaptcha && !captchaToken ? "Checking you're not a robot…" : mode === "signup" ? "Create account" : "Log in"}
       </button>
       <p className="text-center text-sm text-slate-600">
         {mode === "signup" ? (

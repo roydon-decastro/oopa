@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { adjustBeds, deleteProperty, setStatus } from "@/app/dashboard/actions";
+import CopyApplyLink from "./CopyApplyLink";
 
 type Status = "draft" | "active" | "rented" | "archived";
 
@@ -20,6 +21,7 @@ export default function ListingActions({ id, status, beds }: { id: string; statu
   return (
     <div className={`flex flex-wrap gap-2 text-sm ${pending ? "opacity-50" : ""}`}>
       <Link href={`/dashboard/properties/${id}/edit`} className="btn-outline px-3 py-1.5">Edit</Link>
+      {status !== "archived" && <CopyApplyLink propertyId={id} compact />}
       {beds && (
         <span className="flex items-center gap-1 rounded-md border border-slate-300 px-2">
           <button className="px-1 disabled:opacity-40" aria-label="One less bed taken" disabled={pending || beds.taken <= 0}

@@ -10,8 +10,6 @@ import { GENDER_LABEL, bedsLeft, effectiveRules } from "@/lib/dorm";
 import { getSession } from "@/lib/session";
 import { formatPHP } from "@/lib/format";
 import { FURNISHING, PROPERTY_TYPES } from "@/lib/ph";
-import ApplyForm from "@/components/ApplyForm";
-import { applyToProperty } from "@/app/applications/actions";
 import { describeTerms, effectiveTerms } from "@/lib/utilities";
 
 const typeLabel = Object.fromEntries(PROPERTY_TYPES) as Record<string, string>;
@@ -24,7 +22,7 @@ async function load(id: string) {
     where: eq(property.id, id),
     with: {
       photos: { orderBy: asc(propertyPhoto.position) },
-      owner: { columns: { name: true, createdAt: true } },
+      owner: { columns: { name: true, createdAt: true, phone: true, email: true } },
       building: { with: { photos: { orderBy: asc(buildingPhoto.position) } } },
     },
   });
@@ -184,19 +182,29 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
               <Link href={`/dashboard/properties/${p.id}/edit`} className="btn w-full">Edit your listing</Link>
             ) : !session ? (
               <>
-                <p className="mb-3 text-sm text-slate-600">Create a free account to apply for this place.</p>
-                <Link href={`/signup?next=/listings/${p.id}`} className="btn w-full">Sign up to apply</Link>
+                <p className="mb-3 text-sm text-slate-600">Create a free account or log in to see the owner&apos;s contact number.</p>
+                <Link href={`/signup?next=/listings/${p.id}`} className="btn w-full">Sign up to contact the owner</Link>
                 <Link href={`/login?next=/listings/${p.id}`} className="mt-2 block text-center text-sm text-emerald-700 underline">I already have an account</Link>
               </>
             ) : myApp && myApp.status !== "withdrawn" ? (
               <div className="rounded-md bg-emerald-50 p-4 text-sm text-emerald-800">
-                You applied on {myApp.createdAt.toLocaleDateString("en-PH", { dateStyle: "medium" })}.{" "}
+                You sent your lease application on {myApp.createdAt.toLocaleDateString("en-PH", { dateStyle: "medium" })}.{" "}
                 <Link href="/applications" className="underline">Track your application</Link>
               </div>
             ) : !isPublicListing(p) ? null : (
               <>
-                <h2 className="mb-3 font-semibold">{perBed ? "Apply for a bed" : "Apply for this place"}</h2>
-                <ApplyForm action={applyToProperty.bind(null, p.id)} minLease={p.minLeaseMonths} />
+                <h2 className="font-semibold">Contact the owner</h2>
+                <p className="mt-1 text-sm text-slate-600">{p.owner.name}</p>
+                {p.owner.phone ? (
+                  <a href={`tel:${p.owner.phone.replace(/[^\d+]/g, "")}`} className="btn mt-3 w-full">📞 Call {p.owner.phone}</a>
+                ) : (
+                  <a href={`mailto:${p.owner.email}`} className="btn mt-3 w-full break-all">✉️ Email {p.owner.email}</a>
+                )}
+                <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-slate-600">
+                  <li>Call the owner to ask questions and set a viewing.</li>
+                  <li>Visit the place before paying anything.</li>
+                  <li>If you both agree, the owner sends you a link to the lease application form.</li>
+                </ol>
               </>
             )}
           </div>

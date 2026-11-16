@@ -3,6 +3,7 @@
 // Note: Better Auth rate-limits sign-ups (3 per 10s per IP), so leave ~10s between test runs.
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium } = require('playwright');
+const { getApplyLink, fillLease } = require('./lib/lease.cjs');
 const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
 (async () => {
   const base = process.env.BASE || 'http://localhost:3000';
@@ -28,6 +29,9 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await owner.fill('input[name=barangay]', 'Lahug'); await owner.fill('input[name=city]', 'Cebu City'); await owner.fill('input[name=province]', 'Cebu');
   await owner.check('input[value="Parking"]');
   await owner.setInputFiles('input[name=photos]', [photo]);
+  await owner.fill('input[name=reservationFeePhp]', '5000');
+  await owner.fill('input[name=maxOccupants]', '2');
+  await owner.fill('textarea[name=leaseTerms]', 'No pets.\nNo smoking (vaping included).');
   await owner.click('button:has-text("Publish listing")'); await owner.waitForURL('**/dashboard?saved=published');
   log('owner published');
 
@@ -40,39 +44,65 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   assert(await r.locator(`text=${title}`).count() === 0, 'price filter excludes');
   log('search ok');
 
-  // Renter opens listing, signs up from it, applies
+  // Renter opens the listing and sees how to contact the owner (no apply form on the listing)
   await r.goto(base + '/listings?city=Lahug');
   await r.click(`text=${title}`);
   await r.waitForSelector('text=Move-in cost');
   const listingUrl = r.url();
+  const propertyId = listingUrl.split('/').pop();
   assert((await r.textContent('aside')).includes('₱54,000'), 'move-in cost = 1 adv + 2 dep');
-  await r.click('text=Sign up to apply');
+  assert(await r.locator('textarea, input[name=moveInDate]').count() === 0, 'no application form on listing');
+  await r.click('text=Sign up to contact the owner');
   await r.fill('#name', 'Paolo Garcia'); await r.fill('#email', `renter${stamp}@example.com`); await r.fill('#password', 'password123');
   await r.fill('#phone', '09181112222');
   await r.check('input[name=consent]'); await r.click('button:has-text(\"Create account\")');
   await r.waitForURL(listingUrl);
+  const aside = await r.textContent('aside');
+  assert(aside.includes('Contact the owner') && (aside.includes('Call') || aside.includes('Email')), 'owner contact shown to logged-in renter');
   if (shots) { await r.waitForFunction(() => [...document.images].every(i => i.complete)); await r.screenshot({ path: shots + '/listing.png' }); }
-  await r.fill('input[name=moveInDate]', new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10));
-  await r.fill('input[name=monthlyIncomePhp]', '65000');
-  await r.fill('input[name=employment]', 'Nurse at Chong Hua Hospital');
-  await r.fill('textarea[name=message]', 'Hi! I work nearby and can move in within two weeks.');
-  await r.click('button:has-text("Send application")');
-  await r.waitForURL('**/applications?sent=1');
-  assert(await r.locator('text=Submitted').count() >= 1, 'status submitted');
-  await r.goto(listingUrl);
-  assert(await r.locator('text=You applied on').count() === 1, 'no duplicate apply form');
-  log('apply ok');
+  log('contact shown');
 
-  // Owner reviews: contact hidden until review, then approves
+  // They agree; owner sends the private application link; renter fills in the lease application
+  const link = await getApplyLink(owner, base, propertyId);
+  assert(/\/apply\/[A-Za-z0-9_-]{20,}$/.test(link), 'link format ' + link);
+  await r.goto(link);
+  if (shots) await r.screenshot({ path: shots + '/lease-form.png', fullPage: true });
+  const form = await r.textContent('main');
+  assert(form.includes('reservation fee of ₱5,000') && form.includes('No smoking (vaping included).') && form.includes('Up to 2 tenants only'), 'owner terms on form');
+  await fillLease(r, { name: 'Paolo Garcia', tenants: [{ name: 'Liza Garcia', age: 29 }] });
+  await r.waitForURL(/\/applications\/[0-9a-f-]+\/lease\?sent=1/);
+  const leaseUrl = r.url().split('?')[0];
+  const lease = await r.textContent('main');
+  assert(lease.includes('Paolo Garcia') && lease.includes('N01-23-456789') && lease.includes('Liza Garcia') && lease.includes('₱36,000') && lease.includes('No pets.'), 'lease view');
+  await r.goto(link);
+  assert(await r.locator('text=You already sent your lease application').count() === 1, 'no duplicate lease application');
+  log('lease application sent');
+
+  // Owner reviews the lease application and approves
   await owner.goto(base + '/dashboard/applications');
   const card = owner.locator('li', { hasText: 'Paolo Garcia' });
-  assert(await card.locator('text=Shown when you review or approve').count() === 1, 'contact hidden');
-  assert((await card.textContent()).includes('3.6× rent'), 'income ratio shown');
-  await card.locator('button:has-text("Approve")').click();
-  await card.locator('text=Approved').waitFor();
-  assert((await card.textContent()).includes('09181112222'), 'contact shown after approve');
-  if (shots) await owner.screenshot({ path: shots + '/owner-applications.png' });
+  await card.locator('text=View lease application').click();
+  await owner.waitForURL(leaseUrl);
+  assert((await owner.textContent('main')).includes('Chong Hua Hospital'), 'owner sees lease form');
+  if (shots) await owner.screenshot({ path: shots + '/lease-view.png', fullPage: true });
+  await owner.click('button:has-text("Approve")');
+  await owner.locator('text=Approved').first().waitFor();
   log('owner approve ok');
+
+  // Another user can't open the lease application
+  const stranger = await (await b.newContext(ctxOpts)).newPage();
+  await stranger.goto(base + '/signup');
+  await stranger.fill('#name', 'Nosy Neighbor'); await stranger.fill('#email', `nosy${stamp}@example.com`); await stranger.fill('#password', 'password123');
+  await stranger.check('input[name=consent]'); await stranger.click('button:has-text(\"Create account\")'); await stranger.waitForURL('**/listings');
+  assert((await stranger.goto(leaseUrl)).status() === 404, 'lease hidden from others');
+  // A replaced link stops working
+  await owner.goto(`${base}/dashboard/properties/${propertyId}/edit`);
+  await owner.click('button:has-text("Application link")');
+  await owner.click('text=Make a new link'); await owner.click('button.text-red-700:has-text("Make a new link")');
+  await owner.waitForFunction((old) => document.querySelector('input[aria-label="Application link"]')?.value !== old, link);
+  await stranger.goto(link);
+  assert(await stranger.locator("text=This application link isn't valid").count() === 1, 'old link invalid');
+  log('privacy ok');
 
   await r.goto(base + '/applications');
   assert(await r.locator('text=Approved!').count() === 1, 'renter sees approval');

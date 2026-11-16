@@ -2,6 +2,7 @@
 // Set PHOTO to a JPG path. Better Auth rate-limits sign-ups (3 per 10s per IP), so leave ~10s between test runs.
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium } = require('playwright');
+const { getApplyLink, fillLease } = require('./lib/lease.cjs');
 const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
 (async () => {
   const base = process.env.BASE || 'http://localhost:3000';
@@ -94,13 +95,16 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   const body = await r.textContent('main');
   assert(body.includes('403 · Floor 4') && body.includes('Water tank') && body.includes('About ' + name), 'unit page merges building info');
   assert(await r.locator('main img').count() >= 1, 'building photo used for unit');
-  // Apply
-  await r.click('text=Sign up to apply');
+  // Agreed: owner sends unit 403's application link; renter signs up from it and applies
+  const unitId = r.url().split('/').pop();
+  const link = await getApplyLink(o, base, unitId);
+  await r.goto(link);
+  await r.click('text=Create an account');
   await r.fill('#name', 'Ana Lim'); await r.fill('#email', `brenter${stamp}@example.com`); await r.fill('#password', 'password123');
-  const unitUrl = new URL(r.url()).searchParams.get('next');
-  await r.check('input[name=consent]'); await r.click('button:has-text(\"Create account\")'); await r.waitForURL('**' + unitUrl);
-  await r.fill('input[name=moveInDate]', new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10));
-  await r.click('button:has-text("Send application")'); await r.waitForURL('**/applications?sent=1');
+  await r.check('input[name=consent]'); await r.click('button:has-text(\"Create account\")'); await r.waitForURL('**' + new URL(link).pathname);
+  await fillLease(r, { name: 'Ana Lim' });
+  await r.waitForURL(/\/lease\?sent=1/);
+  assert((await r.textContent('main')).includes(', 403, 88 Juan Luna Ave'), 'lease address includes building and unit');
   log('renter applied to unit 403');
 
   await o.goto(buildingUrl);

@@ -4,6 +4,7 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { property, propertyPhoto } from "@/db/schema";
 import PropertyForm from "@/components/PropertyForm";
+import CopyApplyLink from "@/components/CopyApplyLink";
 import PhotoManager from "@/components/PhotoManager";
 import { deletePhotos, updateProperty } from "@/app/dashboard/actions";
 import { requireOwner } from "@/lib/session";
@@ -31,7 +32,10 @@ export default async function EditPropertyPage({ params }: { params: Promise<{ i
       )}
       <div className="mb-8 mt-2 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">{row.building ? `Edit ${row.building.isDormitory ? "room" : "unit"} ${row.unitLabel}` : "Edit property"}</h1>
-        <Link href={`/dashboard/properties/${row.id}/utilities`} className="btn-outline">⚡💧 Utility bills</Link>
+        <div className="flex flex-wrap gap-2">
+          <CopyApplyLink propertyId={row.id} />
+          <Link href={`/dashboard/properties/${row.id}/utilities`} className="btn-outline">⚡💧 Utility bills</Link>
+        </div>
       </div>
       {row.removedAt && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">

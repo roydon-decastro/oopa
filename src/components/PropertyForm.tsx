@@ -155,6 +155,23 @@ export default function PropertyForm({ action, initial, existingPhotoCount = 0, 
         </div>
       </Section>
 
+
+      <Section title="Lease application terms">
+        <p className="-mt-1 text-sm text-slate-600 sm:col-span-2">
+          Shown on the lease application form you send to a renter after you&apos;ve agreed. Advance and deposit amounts are added automatically.{buildingName ? " Leave blank to use the building\u2019s terms." : ""}
+        </p>
+        <Field label="Reservation fee (₱, optional)">
+          <input className="input" name="reservationFeePhp" type="number" min={0} step="1" defaultValue={p?.reservationFeePhp ?? ""} placeholder="e.g. 5000" />
+        </Field>
+        <Field label="Maximum tenants, including kids (optional)">
+          <input className="input" name="maxOccupants" type="number" min={1} max={50} defaultValue={p?.maxOccupants ?? ""} placeholder="e.g. 3" />
+        </Field>
+        <Field label="Special covenants or agreements (one per line)" className="sm:col-span-2">
+          <textarea className="input min-h-32" name="leaseTerms" maxLength={5000} defaultValue={p?.leaseTerms ?? ""}
+            placeholder={"No pets. No smoking (vaping and e-cigarettes included).\nNo parties outside the unit. No loud noise that disturbs other tenants.\nNo LPG tanks, electric stove only."} />
+        </Field>
+      </Section>
+
       <UtilityFields mode={buildingName ? "unit" : "property"} initial={p} buildingSummary={buildingUtilities} />
 
       <Section title={existingPhotoCount ? "Add more photos" : "Photos"}>

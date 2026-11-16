@@ -13,6 +13,7 @@ import { checkPhotos, photosFrom } from "@/lib/photos";
 import { parseUtilities } from "@/lib/utility-input";
 import { auth } from "@/lib/auth";
 import { parseBeds, parseRules, statusForBeds } from "@/lib/dorm";
+import { parseLeaseTerms } from "@/lib/lease";
 
 export type FormState = { error?: string } | undefined;
 
@@ -81,11 +82,13 @@ export async function createProperty(_prev: FormState, formData: FormData): Prom
   const beds = parseBeds(formData, parsed.data.type);
   if ("error" in beds) return { error: beds.error };
   const rules = parseRules(formData);
+  const lease = parseLeaseTerms(formData);
+  if ("error" in lease) return { error: lease.error };
 
   const publish = formData.get("intent") === "publish";
   const [row] = await db
     .insert(property)
-    .values({ ...parsed.data, ...util.data, ...beds, ...rules, ownerId: me.id, status: statusForBeds(publish ? "active" : "draft", beds) })
+    .values({ ...parsed.data, ...util.data, ...beds, ...rules, ...lease, ownerId: me.id, status: statusForBeds(publish ? "active" : "draft", beds) })
     .returning({ id: property.id });
   await savePhotos(row.id, me.id, files);
   revalidatePath("/dashboard");
@@ -127,10 +130,12 @@ export async function updateProperty(id: string, _prev: FormState, formData: For
   const beds = parseBeds(formData, parsed.data.type);
   if ("error" in beds) return { error: beds.error };
   const rules = parseRules(formData);
+  const lease = parseLeaseTerms(formData);
+  if ("error" in lease) return { error: lease.error };
 
   const intent = formData.get("intent");
   const status = statusForBeds(intent === "publish" ? "active" : intent === "draft" ? "draft" : existing.status, beds);
-  await db.update(property).set({ ...parsed.data, ...util.data, ...unitFields, ...beds, ...rules, status }).where(eq(property.id, id));
+  await db.update(property).set({ ...parsed.data, ...util.data, ...unitFields, ...beds, ...rules, ...lease, status }).where(eq(property.id, id));
   await savePhotos(id, me.id, files);
   revalidatePath("/dashboard");
   revalidatePath(`/listings/${id}`);
@@ -194,4 +199,14 @@ export async function becomeOwner() {
   // Refresh the cached session so the new role shows up immediately.
   await auth.api.getSession({ headers: await headers(), query: { disableCookieCache: true } });
   redirect("/dashboard");
+}
+
+/** The owner's mobile number, shown on their listings so renters can call. */
+export async function savePhone(formData: FormData) {
+  const session = await requireOwner();
+  const phone = String(formData.get("phone") ?? "").trim();
+  if (!/^[0-9+()\s-]{7,20}$/.test(phone)) return;
+  await db.update(user).set({ phone }).where(eq(user.id, session.user.id));
+  await auth.api.getSession({ headers: await headers(), query: { disableCookieCache: true } });
+  revalidatePath("/dashboard");
 }

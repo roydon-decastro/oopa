@@ -22,6 +22,7 @@ export default async function OwnerApplications({ searchParams }: { searchParams
         with: {
           property: { columns: { id: true, title: true, monthlyRentPhp: true } },
           renter: { columns: { name: true, email: true, phone: true } },
+          lease: { columns: { submittedAt: true } },
         },
       })
     : [];
@@ -34,7 +35,7 @@ export default async function OwnerApplications({ searchParams }: { searchParams
 
       {apps.length === 0 ? (
         <div className="mt-10 rounded-xl border border-dashed border-slate-300 p-12 text-center text-slate-600">
-          No applications yet. They&apos;ll appear here as soon as renters apply to your published listings.
+          No applications yet. When you and a renter agree on a rental, send them your listing&apos;s <strong>Application link</strong> from <Link href="/dashboard" className="text-emerald-700 underline">My listings</Link>. Their lease application will appear here.
         </div>
       ) : (
         <ul className="mt-8 space-y-4">
@@ -52,6 +53,9 @@ export default async function OwnerApplications({ searchParams }: { searchParams
                   </div>
                   <DecisionButtons id={a.id} status={a.status} />
                 </div>
+                {a.lease && (
+                  <Link href={`/applications/${a.id}/lease`} className="btn-outline mt-3 px-3 py-1.5 text-sm">📄 View lease application</Link>
+                )}
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                   <div><dt className="text-slate-500">Move-in</dt><dd>{a.moveInDate ? new Date(a.moveInDate).toLocaleDateString("en-PH", { dateStyle: "medium" }) : "—"}</dd></div>
                   <div><dt className="text-slate-500">Lease</dt><dd>{a.leaseMonths ? `${a.leaseMonths} months` : "—"}</dd></div>

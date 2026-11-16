@@ -3,6 +3,7 @@ import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { building, buildingPhoto, property, propertyPhoto } from "@/db/schema";
 import { requireOwner } from "@/lib/session";
+import { savePhone } from "./actions";
 import { formatPHP } from "@/lib/format";
 import { STATUS_LABEL } from "@/lib/ph";
 import ListingActions from "@/components/ListingActions";
@@ -50,6 +51,15 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <Link href="/dashboard/properties/new" className="btn">+ Add a property</Link>
         </div>
       </div>
+      {!user.phone && (
+        <form action={savePhone} className="mt-6 flex flex-wrap items-end gap-2 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <label className="min-w-0 flex-1">
+            <span className="mb-1 block font-medium">Add your mobile number so renters can call you about your listings.</span>
+            <input className="input" name="phone" type="tel" required placeholder="09XX XXX XXXX" />
+          </label>
+          <button className="btn shrink-0">Save number</button>
+        </form>
+      )}
       {saved && BANNERS[saved] && (
         <p className="mt-6 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{BANNERS[saved]}</p>
       )}

@@ -3,67 +3,15 @@
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { randomBytes } from "node:crypto";
 import { after } from "next/server";
-import { z } from "zod";
 import { db } from "@/db";
-import { application, property, user as userTable } from "@/db/schema";
-import { isPublicListing } from "@/lib/visibility";
+import { application, leaseApplication, property, user as userTable } from "@/db/schema";
+import { LeaseForm, leaseFormFrom, leaseTermsFor } from "@/lib/lease";
+import { listingForToken } from "@/lib/apply-link";
 import { statusForBeds } from "@/lib/dorm";
 import { sendEmail } from "@/lib/email";
-import { formatPHP } from "@/lib/format";
 import { requireOwner, requireUser } from "@/lib/session";
-
-export type ApplyState = { error?: string } | undefined;
-
-const ApplyInput = z.object({
-  moveInDate: z.string().date("Choose your preferred move-in date."),
-  leaseMonths: z.coerce.number().int().min(1).max(120),
-  occupants: z.coerce.number().int().min(1, "At least 1 occupant.").max(30),
-  monthlyIncomePhp: z.preprocess((v) => (v === "" ? undefined : v), z.coerce.number().min(0).optional()),
-  employment: z.string().trim().max(200).optional(),
-  message: z.string().trim().max(2000).optional(),
-});
-
-export async function applyToProperty(propertyId: string, _prev: ApplyState, formData: FormData): Promise<ApplyState> {
-  const { user } = await requireUser(`/listings/${propertyId}`);
-  const parsed = ApplyInput.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-
-  const listing = await db.query.property.findFirst({ where: eq(property.id, propertyId) });
-  if (!listing || !isPublicListing(listing)) return { error: "This listing is no longer accepting applications." };
-  if (listing.ownerId === user.id) return { error: "You can't apply to your own listing." };
-
-  const existing = await db.query.application.findFirst({
-    where: and(eq(application.propertyId, propertyId), eq(application.renterId, user.id)),
-  });
-  if (existing && existing.status !== "withdrawn") return { error: "You've already applied to this property." };
-
-  if (existing) {
-    await db.update(application).set({ ...parsed.data, status: "submitted", ownerNotes: null }).where(eq(application.id, existing.id));
-  } else {
-    await db.insert(application).values({ ...parsed.data, propertyId, renterId: user.id });
-  }
-  revalidatePath("/applications");
-  revalidatePath("/dashboard");
-
-  const d = parsed.data;
-  after(async () => {
-    const owner = await db.query.user.findFirst({ where: eq(userTable.id, listing.ownerId) });
-    if (!owner) return;
-    await sendEmail({
-      to: owner.email,
-      subject: `New application: ${listing.title}`,
-      heading: `${user.name} applied for ${listing.title}`,
-      lines: [
-        `Move-in: ${d.moveInDate} · Lease: ${d.leaseMonths} months · Occupants: ${d.occupants}`,
-        ...(d.monthlyIncomePhp ? [`Monthly income: ${formatPHP(d.monthlyIncomePhp)} (${(d.monthlyIncomePhp / listing.monthlyRentPhp).toFixed(1)}× rent)`] : []),
-        ...(d.message ? [`Message: “${d.message.slice(0, 500)}”`] : []),
-      ],
-      cta: { label: "Review the application", path: `/dashboard/applications?property=${listing.id}` },
-    });
-  });
-  redirect("/applications?sent=1");
-}
 
 export async function withdrawApplication(id: string) {
   const { user } = await requireUser("/applications");
@@ -96,10 +44,10 @@ export async function decideApplication(id: string, status: "reviewing" | "appro
       await sendEmail(status === "approved" ? {
         to: renter.email,
         subject: `Approved: ${row.property.title}`,
-        heading: "Good news, your application was approved",
+        heading: "Good news, your lease application was approved",
         lines: [
-          `The owner approved your application for ${row.property.title}.`,
-          `They now have your contact details and will reach out to arrange the viewing, contract and move-in. Please confirm the owner's identity and visit the property before paying anything.`,
+          `The owner approved your lease application for ${row.property.title}.`,
+          `They will contact you to sign the lease contract and arrange your move-in. Please confirm the owner's identity before paying anything.`,
         ],
         cta: { label: "View my applications", path: "/applications" },
       } : {
@@ -113,4 +61,76 @@ export async function decideApplication(id: string, status: "reviewing" | "appro
   }
   revalidatePath("/dashboard/applications");
   revalidatePath("/dashboard");
+}
+
+// ---------- Private application link ----------
+
+/** The owner's private application link for a listing, created on first use. */
+export async function getApplyLink(propertyId: string, reset = false): Promise<string> {
+  const { user } = await requireOwner();
+  const p = await db.query.property.findFirst({ where: and(eq(property.id, propertyId), eq(property.ownerId, user.id)) });
+  if (!p) throw new Error("Listing not found.");
+  let token = p.applyToken;
+  if (!token || reset) {
+    token = randomBytes(18).toString("base64url");
+    await db.update(property).set({ applyToken: token }).where(eq(property.id, p.id));
+  }
+  return `/apply/${token}`;
+}
+
+export type LeaseState = { error?: string } | undefined;
+
+/** A renter's lease application, sent through the owner's private link. */
+export async function submitLease(token: string, _prev: LeaseState, formData: FormData): Promise<LeaseState> {
+  const { user } = await requireUser(`/apply/${token}`);
+  const p = await listingForToken(token);
+  if (!p) return { error: "This application link is no longer valid. Ask the owner for a new one." };
+  if (p.ownerId === user.id) return { error: "This is your own listing." };
+  const existing = await db.query.application.findFirst({
+    where: and(eq(application.propertyId, p.id), eq(application.renterId, user.id)),
+  });
+  if (existing && existing.status !== "withdrawn") return { error: "You've already sent a lease application for this place." };
+
+  const parsed = LeaseForm.safeParse(leaseFormFrom(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const d = parsed.data;
+  const terms = leaseTermsFor(p, p.building);
+  const occupants = 1 + d.otherTenants.length;
+  if (terms.maxOccupants && occupants > terms.maxOccupants) {
+    return { error: `This place allows up to ${terms.maxOccupants} tenants in total, including kids.` };
+  }
+  if (formData.get("agree") !== "on") return { error: "Tick the box to confirm your answers and agree to the covenants." };
+  const signedName = String(formData.get("signedName") ?? "").trim();
+  if (signedName.toLowerCase() !== d.fullName.toLowerCase()) {
+    return { error: "To sign, type your full name exactly as you wrote it for the primary tenant." };
+  }
+
+  const values = {
+    status: "submitted" as const, moveInDate: d.leaseStart, occupants, employment: d.employerName,
+    leaseMonths: null, monthlyIncomePhp: null, message: null, ownerNotes: null,
+  };
+  let applicationId: string;
+  if (existing) {
+    await db.delete(leaseApplication).where(eq(leaseApplication.applicationId, existing.id));
+    await db.update(application).set(values).where(eq(application.id, existing.id));
+    applicationId = existing.id;
+  } else {
+    const [row] = await db.insert(application).values({ ...values, propertyId: p.id, renterId: user.id }).returning({ id: application.id });
+    applicationId = row.id;
+  }
+  await db.insert(leaseApplication).values({ applicationId, form: d, terms, signedName });
+  revalidatePath("/applications");
+  revalidatePath("/dashboard/applications");
+  revalidatePath("/dashboard");
+
+  after(async () => {
+    await sendEmail({
+      to: p.owner.email,
+      subject: `Lease application received: ${p.title}`,
+      heading: `${d.fullName} sent their lease application`,
+      lines: [`Tentative lease start: ${d.leaseStart} · Tenants: ${occupants}`],
+      cta: { label: "Review the lease application", path: `/applications/${applicationId}/lease` },
+    });
+  });
+  redirect(`/applications/${applicationId}/lease?sent=1`);
 }

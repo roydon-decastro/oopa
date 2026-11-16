@@ -11,6 +11,7 @@ import { checkPhotos, photosFrom } from "@/lib/photos";
 import { deletePhoto as removeFile, uploadPhoto } from "@/lib/storage";
 import { parseUtilities } from "@/lib/utility-input";
 import { parseRules } from "@/lib/dorm";
+import { parseLeaseTerms } from "@/lib/lease";
 
 export type BuildingFormState = { error?: string } | undefined;
 
@@ -86,6 +87,8 @@ export async function createBuilding(_prev: BuildingFormState, formData: FormDat
   if (d && !d.success) return { error: d.error.issues[0].message };
   const bedsTotal = d?.success ? d.data.bedsPerRoom : null;
   const rules = parseRules(formData);
+  const lease = parseLeaseTerms(formData);
+  if ("error" in lease) return { error: lease.error };
   const util = parseUtilities(formData);
   if ("error" in util) return { error: util.error };
   if (t.data.floors * t.data.unitsPerFloor > 500) return { error: `That's more than 500 ${dorm ? "rooms" : "units"}. Please contact us for very large buildings.` };
@@ -94,7 +97,7 @@ export async function createBuilding(_prev: BuildingFormState, formData: FormDat
   if (photoErr) return { error: photoErr };
 
   const { floors, unitsPerFloor, publish, ...unit } = t.data;
-  const [row] = await db.insert(building).values({ ...b.data, ...util.data, ...rules, isDormitory: dorm, ownerId: user.id, floors })
+  const [row] = await db.insert(building).values({ ...b.data, ...util.data, ...rules, ...lease, isDormitory: dorm, ownerId: user.id, floors })
     .returning({ id: building.id });
 
   const units = [];
@@ -135,7 +138,9 @@ export async function updateBuilding(id: string, _prev: BuildingFormState, formD
   const photoErr = checkPhotos(files, existing.photos.length);
   if (photoErr) return { error: photoErr };
 
-  await db.update(building).set({ ...b.data, ...util.data, ...parseRules(formData) }).where(eq(building.id, id));
+  const lease = parseLeaseTerms(formData);
+  if ("error" in lease) return { error: lease.error };
+  await db.update(building).set({ ...b.data, ...util.data, ...parseRules(formData), ...lease }).where(eq(building.id, id));
   // Keep every unit's address and title in sync with the building.
   const units = await db.select({ id: property.id, unitLabel: property.unitLabel }).from(property).where(eq(property.buildingId, id));
   for (const u of units) {

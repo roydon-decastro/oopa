@@ -3,6 +3,7 @@
 // Note: Better Auth rate-limits sign-ups (3 per 10s per IP), so leave ~10s between test runs.
 /* eslint-disable @typescript-eslint/no-require-imports */
 const { chromium } = require('playwright');
+const { getApplyLink, fillLease } = require('./lib/lease.cjs');
 const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
 (async () => {
   const base = process.env.BASE || 'http://localhost:3000';
@@ -97,15 +98,19 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   if (shots) { await r.waitForFunction(() => [...document.images].every(i => i.complete)); await r.screenshot({ path: shots + '/dorm-listing.png', fullPage: true }); }
   log('public pages ok');
 
-  // A renter applies for the last bed in 101; approving fills the room
-  await r.click('text=Sign up to apply');
+  // A renter agrees with the owner on the last bed in 101 and sends the lease application through the link
+  const roomId = listingUrl.split('/').pop();
+  const link = await getApplyLink(o, base, roomId);
+  await r.goto(link);
+  await r.click('text=Create an account');
   await r.fill('#name', 'Joy Bautista'); await r.fill('#email', `drenter${stamp}@example.com`); await r.fill('#password', 'password123');
   await r.check('input[name=consent]'); await r.click('button:has-text("Create account")');
-  await r.waitForURL(listingUrl);
-  await r.waitForSelector('text=Apply for a bed');
-  await r.fill('input[name=moveInDate]', new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10));
-  await r.fill('input[name=employment]', 'Nursing student');
-  await r.click('button:has-text("Send application")'); await r.waitForURL('**/applications?sent=1');
+  await r.waitForURL('**' + new URL(link).pathname);
+  await r.waitForSelector('text=Lease / rental information');
+  const formText = await r.textContent('main');
+  assert(formText.includes('Current base rent (per bed)'), 'per-bed lease form: ' + formText.slice(0, 300));
+  await fillLease(r, { name: 'Joy Bautista', employer: 'Nursing student' });
+  await r.waitForURL(/\/lease\?sent=1/);
   await o.goto(base + '/dashboard/applications');
   const card = o.locator('li', { hasText: 'Joy Bautista' });
   await card.locator('button:has-text("Approve")').click();

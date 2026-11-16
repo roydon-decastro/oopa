@@ -1,7 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
   pgTable, pgEnum, text, timestamp, boolean, index, uuid, numeric, smallint, date,
-  doublePrecision, unique,
+  doublePrecision, unique, jsonb,
 } from "drizzle-orm/pg-core";
 // Database schema (Neon Postgres via Drizzle).
 // Auth tables (user, session, account, verification) follow Better Auth's schema.
@@ -104,6 +104,13 @@ export const utilityKind = pgEnum("utility_kind", ["electricity", "water"]);
 export const genderPolicy = pgEnum("gender_policy", ["any", "male", "female"]);
 
 // Dorm / boarding house rules. On a building they apply to every room; on a room they override the building.
+// Terms shown on the lease application form. On a building they apply to every unit; a unit can override them.
+const leaseColumns = () => ({
+  reservationFeePhp: numeric("reservation_fee_php", { precision: 12, scale: 2, mode: "number" }),
+  maxOccupants: smallint("max_occupants"),
+  leaseTerms: text("lease_terms"),
+});
+
 const dormColumns = () => ({
   genderPolicy: genderPolicy("gender_policy"),
   curfew: text("curfew"),
@@ -145,6 +152,7 @@ export const building = pgTable(
     // A dormitory / boarding house: its rooms are rented per bed.
     isDormitory: boolean("is_dormitory").notNull().default(false),
     ...dormColumns(),
+    ...leaseColumns(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
   },
@@ -202,6 +210,9 @@ export const property = pgTable(
     bedsTotal: smallint("beds_total"),
     bedsTaken: smallint("beds_taken").notNull().default(0),
     ...dormColumns(),
+    ...leaseColumns(),
+    // Secret for the private application link the owner sends to a renter they've agreed with (/apply/<token>).
+    applyToken: text("apply_token").unique(),
     // Set when a site admin takes the listing down. The owner can't republish it until an admin restores it.
     removedAt: timestamp("removed_at"),
     removedReason: text("removed_reason"),
@@ -253,6 +264,17 @@ export const application = pgTable(
 );
 
 // A sub-meter reading. Usage and charge are computed when saved, using the rate in effect then.
+// The lease application form a renter fills in through the owner's private link, after agreeing terms. One per application.
+// `form` holds the answers (see LeaseForm in src/lib/lease.ts); `terms` is a snapshot of the rent and covenants they agreed to.
+export const leaseApplication = pgTable("lease_application", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  applicationId: uuid("application_id").notNull().unique().references(() => application.id, { onDelete: "cascade" }),
+  form: jsonb("form").notNull(),
+  terms: jsonb("terms").notNull(),
+  signedName: text("signed_name").notNull(),
+  submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+});
+
 export const meterReading = pgTable(
   "meter_reading",
   {
@@ -313,6 +335,11 @@ export const propertyPhotoRelations = relations(propertyPhoto, ({ one }) => ({
 export const applicationRelations = relations(application, ({ one }) => ({
   property: one(property, { fields: [application.propertyId], references: [property.id] }),
   renter: one(user, { fields: [application.renterId], references: [user.id] }),
+  lease: one(leaseApplication, { fields: [application.id], references: [leaseApplication.applicationId] }),
+}));
+
+export const leaseApplicationRelations = relations(leaseApplication, ({ one }) => ({
+  application: one(application, { fields: [leaseApplication.applicationId], references: [application.id] }),
 }));
 
 export type Property = typeof property.$inferSelect;

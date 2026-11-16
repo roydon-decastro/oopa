@@ -12,7 +12,7 @@ export const metadata = { title: "My applications · Oopa" };
 const NEXT_STEP: Record<string, string> = {
   submitted: "The owner hasn't opened your application yet.",
   reviewing: "The owner is reviewing your application.",
-  approved: "Approved! The owner will contact you to arrange the contract and move-in.",
+  approved: "Approved! Arrange the advance and deposit payment with the owner. They'll send the contract of lease here for you to review.",
   rejected: "The owner chose another applicant. Keep browsing, there are more places.",
   withdrawn: "You withdrew this application.",
 };
@@ -25,6 +25,7 @@ export default async function MyApplications({ searchParams }: { searchParams: P
     orderBy: desc(application.createdAt),
     with: {
       lease: { columns: { id: true } },
+      contract: { columns: { sentAt: true, reviewedAt: true } },
       property: {
         columns: { id: true, title: true, monthlyRentPhp: true, city: true, province: true },
         with: { photos: { orderBy: asc(propertyPhoto.position), limit: 1 } },
@@ -57,7 +58,12 @@ export default async function MyApplications({ searchParams }: { searchParams: P
                 <Link href={`/listings/${a.property.id}`} className="mt-1 block font-semibold hover:text-emerald-700">{a.property.title}</Link>
                 <p className="text-sm text-slate-600">{formatPHP(a.property.monthlyRentPhp)}/mo · {a.property.city}, {a.property.province}</p>
                 <p className="mt-2 text-sm text-slate-700">{NEXT_STEP[a.status]}</p>
-                {a.lease && <Link href={`/applications/${a.id}/lease`} className="mt-1 inline-block text-sm text-emerald-700 underline">View my lease application</Link>}
+                {a.contract?.sentAt && (
+                  <Link href={`/applications/${a.id}/contract`} className="btn mt-2 px-3 py-1.5 text-sm">
+                    📝 {a.contract.reviewedAt ? "View contract of lease" : "Review your contract of lease"}
+                  </Link>
+                )}
+                {a.lease && <Link href={`/applications/${a.id}/lease`} className="mt-1 block text-sm text-emerald-700 underline">View my lease application</Link>}
                 <p className="mt-1 text-xs text-slate-500">Applied {a.createdAt.toLocaleDateString("en-PH", { dateStyle: "medium" })}</p>
               </div>
               {(a.status === "submitted" || a.status === "reviewing") && <WithdrawButton id={a.id} />}

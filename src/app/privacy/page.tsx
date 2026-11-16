@@ -19,6 +19,7 @@ export default function Privacy() {
         <li><strong>Listing details (owners):</strong> property and building information, address, photos, rent and terms, utility rates, and meter readings you record.</li>
         <li><strong>Inquiry details (renters):</strong> your message to the owner, preferred move-in date and number of occupants.</li>
         <li><strong>Lease application (renters, only after you and the owner agree):</strong> full name and nickname, contact numbers, address, the type and number of up to two valid IDs, spouse or partner&apos;s name, employer, business or school and its address and contact number, an emergency contact, other tenants&apos; names, ages and work or school, the tentative start of your lease, and your typed signature. Religion is optional; if you give it, you consent to it being shared with that owner.</li>
+        <li><strong>Contract of lease (owners and renters, after an application is approved):</strong> the details the owner enters to prepare the contract, including both parties&apos; full names, civil status, citizenship and residence address, an optional ID type and number for the notary&apos;s acknowledgment, the lease terms and the names of witnesses. Oopa remembers the owner&apos;s own details to fill in their next contract.</li>
         <li><strong>Technical data:</strong> IP address, browser type and log-in session cookies needed to keep you signed in and to protect the site from abuse.</li>
       </ul>
       <p>We do not ask for bank details or copies of your IDs through the site. Bring photocopies of your IDs when you sign the contract with the owner.</p>
@@ -35,7 +36,7 @@ export default function Privacy() {
       <h2>3. Who can see your data</h2>
       <ul>
         <li><strong>The public</strong> sees published listings, including the owner&apos;s display name, but not the owner&apos;s email or phone number.</li>
-        <li><strong>An owner</strong> sees the inquiries sent to their own properties. A renter&apos;s email and mobile number are only shown once the owner replies. A lease application is shown only to the owner of that property, who uses it to check the tenant and prepare the lease contract.</li>
+        <li><strong>An owner</strong> sees the inquiries sent to their own properties. A renter&apos;s email and mobile number are only shown once the owner replies. A lease application is shown only to the owner of that property, who uses it to check the tenant and prepare the lease contract. A contract of lease is shown only to that owner and, once the owner sends it, to that renter.</li>
         <li><strong>Service providers</strong> that host and run the site for us, under data processing terms: Vercel (web hosting and photo storage), Neon (database), Cloudflare (a bot check on the sign-up page, which sees your IP address and browser details) and our email provider. Some of these store data outside the Philippines; we use providers with appropriate safeguards as required by the Data Privacy Act.</li>
         <li><strong>Authorities</strong>, when required by law or a lawful order.</li>
       </ul>

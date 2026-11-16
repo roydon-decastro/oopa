@@ -23,6 +23,7 @@ export default async function OwnerApplications({ searchParams }: { searchParams
           property: { columns: { id: true, title: true, monthlyRentPhp: true } },
           renter: { columns: { name: true, email: true, phone: true } },
           lease: { columns: { submittedAt: true } },
+          contract: { columns: { sentAt: true, reviewedAt: true } },
         },
       })
     : [];
@@ -53,9 +54,18 @@ export default async function OwnerApplications({ searchParams }: { searchParams
                   </div>
                   <DecisionButtons id={a.id} status={a.status} />
                 </div>
-                {a.lease && (
-                  <Link href={`/applications/${a.id}/lease`} className="btn-outline mt-3 px-3 py-1.5 text-sm">📄 View lease application</Link>
-                )}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {a.lease && (
+                    <Link href={`/applications/${a.id}/lease`} className="btn-outline px-3 py-1.5 text-sm">📄 View lease application</Link>
+                  )}
+                  {a.status === "approved" && (a.contract ? (
+                    <Link href={`/applications/${a.id}/contract`} className="btn-outline px-3 py-1.5 text-sm">
+                      📝 Contract · {a.contract.reviewedAt ? "reviewed by renter" : a.contract.sentAt ? "sent" : "draft"}
+                    </Link>
+                  ) : (
+                    <Link href={`/applications/${a.id}/contract/edit`} className="btn px-3 py-1.5 text-sm">📝 Prepare contract</Link>
+                  ))}
+                </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                   <div><dt className="text-slate-500">Move-in</dt><dd>{a.moveInDate ? new Date(a.moveInDate).toLocaleDateString("en-PH", { dateStyle: "medium" }) : "—"}</dd></div>
                   <div><dt className="text-slate-500">Lease</dt><dd>{a.leaseMonths ? `${a.leaseMonths} months` : "—"}</dd></div>

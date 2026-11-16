@@ -47,7 +47,7 @@ export async function decideApplication(id: string, status: "reviewing" | "appro
         heading: "Good news, your lease application was approved",
         lines: [
           `The owner approved your lease application for ${row.property.title}.`,
-          `They will contact you to sign the lease contract and arrange your move-in. Please confirm the owner's identity before paying anything.`,
+          `Next, arrange the advance and deposit payment with the owner. They'll then send you the contract of lease on Oopa to review before you sign. Please confirm the owner's identity before paying anything.`,
         ],
         cta: { label: "View my applications", path: "/applications" },
       } : {

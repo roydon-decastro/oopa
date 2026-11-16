@@ -25,7 +25,7 @@ export default async function LeaseView({ params, searchParams }: {
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const row = await db.query.application.findFirst({
     where: eq(application.id, id),
-    with: { lease: true, property: { columns: { id: true, title: true, ownerId: true } }, renter: { columns: { email: true } } },
+    with: { lease: true, contract: { columns: { id: true } }, property: { columns: { id: true, title: true, ownerId: true } }, renter: { columns: { email: true } } },
   });
   // Only the renter who sent it and the listing's owner can see a lease application.
   const isOwner = row?.property.ownerId === user.id;
@@ -51,6 +51,11 @@ export default async function LeaseView({ params, searchParams }: {
         <div className="text-right print:hidden">
           <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${APP_STATUS[row.status].style}`}>{APP_STATUS[row.status].label}</span>
           {isOwner && <div className="mt-2"><DecisionButtons id={row.id} status={row.status} /></div>}
+          {isOwner && row.status === "approved" && (
+            <Link href={`/applications/${row.id}/contract${row.contract ? "" : "/edit"}`} className="btn mt-2 px-3 py-1.5 text-sm">
+              📝 {row.contract ? "Open contract" : "Prepare contract"}
+            </Link>
+          )}
         </div>
       </div>
 

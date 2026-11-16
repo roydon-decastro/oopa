@@ -21,6 +21,8 @@ export const user = pgTable("user", {
   phone: text("phone"),
   // Set by a site admin. A suspended user can't log in and their listings are taken down.
   suspendedAt: timestamp("suspended_at"),
+  // An owner's civil status, citizenship, address etc. for the Contract of Lease, remembered from their last contract.
+  lessorDetails: jsonb("lessor_details"),
 });
 
 export const session = pgTable(
@@ -275,6 +277,19 @@ export const leaseApplication = pgTable("lease_application", {
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
 });
 
+// The Contract of Lease the owner prepares after approving a lease application. One per application.
+// `data` holds the filled-in fields (see ContractForm in src/lib/contract.ts). The renter can read it once sent.
+export const leaseContract = pgTable("lease_contract", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  applicationId: uuid("application_id").notNull().unique().references(() => application.id, { onDelete: "cascade" }),
+  data: jsonb("data").notNull(),
+  sentAt: timestamp("sent_at"),
+  // The renter clicked "I've reviewed it, ready to sign". Cleared when the owner changes a sent contract.
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()).notNull(),
+});
+
 export const meterReading = pgTable(
   "meter_reading",
   {
@@ -336,6 +351,11 @@ export const applicationRelations = relations(application, ({ one }) => ({
   property: one(property, { fields: [application.propertyId], references: [property.id] }),
   renter: one(user, { fields: [application.renterId], references: [user.id] }),
   lease: one(leaseApplication, { fields: [application.id], references: [leaseApplication.applicationId] }),
+  contract: one(leaseContract, { fields: [application.id], references: [leaseContract.applicationId] }),
+}));
+
+export const leaseContractRelations = relations(leaseContract, ({ one }) => ({
+  application: one(application, { fields: [leaseContract.applicationId], references: [application.id] }),
 }));
 
 export const leaseApplicationRelations = relations(leaseApplication, ({ one }) => ({

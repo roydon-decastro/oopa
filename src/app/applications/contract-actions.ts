@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
-import { application, leaseContract, user as userTable } from "@/db/schema";
+import { application, leaseContract, property, user as userTable } from "@/db/schema";
 import { ContractForm, contractFormFrom } from "@/lib/contract";
 import { sendEmail } from "@/lib/email";
 import { requireOwner, requireUser } from "@/lib/session";
@@ -20,7 +20,7 @@ export async function saveContract(applicationId: string, _prev: ContractState, 
   if (!isId(applicationId)) return { error: "Application not found." };
   const row = await db.query.application.findFirst({
     where: eq(application.id, applicationId),
-    with: { property: { columns: { ownerId: true, title: true } }, renter: { columns: { email: true } }, contract: true },
+    with: { property: { columns: { id: true, ownerId: true, title: true, status: true, bedsTotal: true, buildingId: true } }, renter: { columns: { email: true } }, contract: true },
   });
   if (!row || row.property.ownerId !== user.id) return { error: "Application not found." };
   if (row.status !== "approved") return { error: "Approve the lease application before preparing the contract." };
@@ -39,6 +39,20 @@ export async function saveContract(applicationId: string, _prev: ContractState, 
   // Remember the lessor's own details for their next contract.
   const { civilStatus, citizenship, address, capacity, idType, idNumber } = data.lessor;
   await db.update(userTable).set({ lessorDetails: { civilStatus, citizenship, address, capacity, idType, idNumber } }).where(eq(userTable.id, user.id));
+
+  // Once the contract goes out, the place is spoken for: take the listing off the site (same as "Unpublish").
+  // Per-bed rooms stay listed while beds are free; approving the renter already took their bed.
+  const unpublish = send && !wasSent && row.property.status === "active" && row.property.bedsTotal == null;
+  if (unpublish) {
+    await db.update(property).set({ status: "draft" }).where(eq(property.id, row.property.id));
+    revalidatePath(`/listings/${row.property.id}`);
+    revalidatePath("/listings");
+    revalidatePath("/dashboard");
+    if (row.property.buildingId) {
+      revalidatePath(`/dashboard/buildings/${row.property.buildingId}`);
+      revalidatePath(`/buildings/${row.property.buildingId}`);
+    }
+  }
 
   if (send) {
     after(async () => {
@@ -59,7 +73,7 @@ export async function saveContract(applicationId: string, _prev: ContractState, 
   revalidatePath(`/applications/${applicationId}/contract`);
   revalidatePath("/dashboard/applications");
   revalidatePath("/applications");
-  redirect(`/applications/${applicationId}/contract?saved=${send ? (wasSent ? "updated" : "sent") : "draft"}`);
+  redirect(`/applications/${applicationId}/contract?saved=${send ? (wasSent ? "updated" : unpublish ? "sent-unpublished" : "sent") : "draft"}`);
 }
 
 /** The renter has read the contract and is ready to sign the printed copy. */

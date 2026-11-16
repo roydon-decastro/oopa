@@ -95,6 +95,9 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
     'SIXTY (60) DAYS', 'MARK REYES', 'UMID / CRN-0000-1111111-2', "Driver's license / N01-23-456789", 'Condition No.3.2',
   ]) assert(doc.includes(s), 'contract text: ' + s);
   log('draft saved, wording ok');
+  const anon0 = await (await b.newContext(opts)).newPage();
+  assert((await anon0.goto(base + '/listings/' + propertyId)).status() === 200, 'listing still live while contract is a draft');
+  await anon0.close();
 
   // Renter can't see a draft
   assert((await r.goto(base + `/applications/${appId}/contract`)).status() === 404, 'draft hidden from renter');
@@ -105,7 +108,11 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await o.click('text=Edit contract');
   assert(await val('lessor.address') === '51 Seattle Street, Cubao, Quezon City', 'edit keeps saved values');
   await o.click('button:has-text("Save and send to renter")');
-  await o.waitForURL('**/contract?saved=sent');
+  await o.waitForURL('**/contract?saved=sent-unpublished');
+  assert(await o.locator('text=unpublished your listing').count() === 1, 'unpublish notice');
+  const anon = await (await b.newContext(opts)).newPage();
+  assert((await anon.goto(base + '/listings/' + propertyId)).status() === 404, 'listing unpublished after sending contract');
+  await anon.close();
   assert(await o.locator('text=Waiting for them to review it').count() === 1, 'owner sees sent');
   log('sent');
 

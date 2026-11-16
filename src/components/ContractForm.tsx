@@ -147,7 +147,7 @@ export default function ContractFormView({ applicationId, initial, sent }: { app
           </>
         )}
       </div>
-      <p className="text-xs text-slate-500">The renter gets an email and can read the contract on Oopa. Either of you can print it for signing.</p>
+      <p className="text-xs text-slate-500">The renter gets an email and can read the contract on Oopa. Either of you can print it for signing.{!sent && " Sending it also unpublishes your listing, so no one else applies."}</p>
     </form>
   );
 }

@@ -17,6 +17,7 @@ const when = (d: Date) => d.toLocaleDateString("en-PH", { dateStyle: "medium", t
 const SAVED: Record<string, string> = {
   draft: "Draft saved. The renter can't see it until you send it.",
   sent: "Sent. We emailed the renter a link to read the contract.",
+  "sent-unpublished": "Sent. We emailed the renter a link to read the contract, and unpublished your listing so no one else applies. You can publish it again from My listings.",
   updated: "Changes saved. We emailed the renter to read the updated contract.",
 };
 

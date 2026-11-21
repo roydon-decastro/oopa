@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session";
 import ContractText from "@/components/ContractText";
 import { ContractFields, fillContract } from "@/lib/contract";
 import PrintButton from "@/components/PrintButton";
+import PrintSheet from "@/components/PrintSheet";
 import ReviewedButton from "@/components/ReviewedButton";
 
 export const metadata = { title: "Contract of lease · Oopa", robots: { index: false, follow: false } };
@@ -71,7 +72,9 @@ export default async function ContractView({ params, searchParams }: {
         )}
       </div>
 
-      <ContractText body={fillContract(c.body, c.fields ? (ContractFields.safeParse(c.fields).data ?? null) : null)} />
+      <PrintSheet>
+        <ContractText body={fillContract(c.body, c.fields ? (ContractFields.safeParse(c.fields).data ?? null) : null)} />
+      </PrintSheet>
     </main>
   );
 }

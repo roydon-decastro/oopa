@@ -9,11 +9,11 @@ export const DEFAULT_CONTRACT_TEMPLATE = `# **CONTRACT OF LEASE**
 
 This Contract of Lease, made and entered into by and between:
 
-**[LESSOR NAME]**, of legal age, ____________ (civil status), Filipino, with residence address at ________________________________________, hereinafter referred to as the "LESSOR";
+**[LESSOR NAME]**, of legal age, [LESSOR CIVIL STATUS], [LESSOR CITIZENSHIP], with residence address at [LESSOR ADDRESS], hereinafter referred to as the "LESSOR";
 
 # And
 
-**[RENTER NAME]**, of legal age, ____________ (civil status), Filipino, with residence address at [RENTER ADDRESS], hereinafter referred to as the "LESSEE";
+**[RENTER NAME]**, of legal age, [RENTER CIVIL STATUS], [RENTER CITIZENSHIP], with residence address at [RENTER ADDRESS], hereinafter referred to as the "LESSEE";
 
 # **WITNESSETH: THAT**
 
@@ -154,3 +154,12 @@ Page No. ________
 Book No. ________
 Series of 20____
 `;
+
+/** Templates saved before the civil status / citizenship / address blanks existed: add those blanks. */
+export function upgradeTemplate(t: string): string {
+  return t
+    .replace("**[LESSOR NAME]**, of legal age, ____________ (civil status), Filipino, with residence address at ________________________________________,",
+      "**[LESSOR NAME]**, of legal age, [LESSOR CIVIL STATUS], [LESSOR CITIZENSHIP], with residence address at [LESSOR ADDRESS],")
+    .replace("**[RENTER NAME]**, of legal age, ____________ (civil status), Filipino, with residence address at [RENTER ADDRESS],",
+      "**[RENTER NAME]**, of legal age, [RENTER CIVIL STATUS], [RENTER CITIZENSHIP], with residence address at [RENTER ADDRESS],");
+}

@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
 import { application, leaseContract, property, user as userTable } from "@/db/schema";
-import { MAX_CONTRACT_LENGTH } from "@/lib/contract";
+import { ContractFields, LessorProfile, MAX_CONTRACT_LENGTH } from "@/lib/contract";
 import { sendEmail } from "@/lib/email";
 import { requireOwner, requireUser } from "@/lib/session";
 
@@ -31,13 +31,23 @@ export async function saveContract(applicationId: string, _prev: ContractState, 
   const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim();
   if (body.length < 200) return { error: "The contract is empty or too short. Restore it from your template and try again." };
   if (body.length > MAX_CONTRACT_LENGTH) return { error: "The contract is too long." };
+  let fieldsJson: unknown = null;
+  try { fieldsJson = JSON.parse(String(formData.get("fields") ?? "null")); } catch { /* handled below */ }
+  const parsedFields = ContractFields.safeParse(fieldsJson);
+  if (!parsedFields.success) return { error: "Some contract details are too long. Shorten them and try again." };
+  const fields = parsedFields.data;
   const send = formData.get("intent") === "send" || !!row.contract?.sentAt;
   const wasSent = !!row.contract?.sentAt;
 
   const now = new Date();
-  const values = { body, sentAt: send ? (row.contract?.sentAt ?? now) : null, reviewedAt: null };
+  const values = { body, fields, sentAt: send ? (row.contract?.sentAt ?? now) : null, reviewedAt: null };
   if (row.contract) await db.update(leaseContract).set(values).where(eq(leaseContract.id, row.contract.id));
   else await db.insert(leaseContract).values({ ...values, applicationId });
+
+  // Remember the lessor's own details for their next contract.
+  await db.update(userTable).set({
+    lessorProfile: { civilStatus: fields.lessorCivilStatus.trim(), citizenship: fields.lessorCitizenship.trim(), address: fields.lessorAddress.trim() },
+  }).where(eq(userTable.id, user.id));
 
   // Once the contract goes out, the place is spoken for: take the listing off the site (same as "Unpublish").
   // Per-bed rooms stay listed while beds are free; approving the renter already took their bed.
@@ -116,6 +126,20 @@ export async function saveContractTemplate(_prev: TemplateState, formData: FormD
   if (template.length < 200) return { error: "Your template is empty or too short. Use Reset to Oopa default to start over." };
   if (template.length > MAX_CONTRACT_LENGTH) return { error: "Your template is too long." };
   await db.update(userTable).set({ contractTemplate: template }).where(eq(userTable.id, user.id));
+  revalidatePath("/dashboard/contract-template");
+  return { saved: true };
+}
+
+/** The owner's civil status, citizenship and address, used to fill in their contracts. */
+export async function saveLessorProfile(_prev: TemplateState, formData: FormData): Promise<TemplateState> {
+  const { user } = await requireOwner("/dashboard/contract-template");
+  const parsed = LessorProfile.safeParse({
+    civilStatus: String(formData.get("civilStatus") ?? "").trim(),
+    citizenship: String(formData.get("citizenship") ?? "").trim(),
+    address: String(formData.get("address") ?? "").trim(),
+  });
+  if (!parsed.success) return { error: "Some of your details are too long." };
+  await db.update(userTable).set({ lessorProfile: parsed.data }).where(eq(userTable.id, user.id));
   revalidatePath("/dashboard/contract-template");
   return { saved: true };
 }

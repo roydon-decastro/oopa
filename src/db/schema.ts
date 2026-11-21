@@ -23,6 +23,8 @@ export const user = pgTable("user", {
   suspendedAt: timestamp("suspended_at"),
   // An owner's own Contract of Lease template (plain text). Null means Oopa's default template.
   contractTemplate: text("contract_template"),
+  // The owner's civil status, citizenship and address, remembered to fill in their next contract.
+  lessorProfile: jsonb("lessor_profile"),
 });
 
 export const session = pgTable(
@@ -283,6 +285,9 @@ export const leaseContract = pgTable("lease_contract", {
   id: uuid("id").primaryKey().defaultRandom(),
   applicationId: uuid("application_id").notNull().unique().references(() => application.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
+  // The contract details form (see ContractFields in src/lib/contract.ts). Its values fill the [BLANKS] in `body`.
+  // Null for contracts whose body was saved already filled in.
+  fields: jsonb("fields"),
   sentAt: timestamp("sent_at"),
   // The renter clicked "I've reviewed it, ready to sign". Cleared when the owner changes a sent contract.
   reviewedAt: timestamp("reviewed_at"),

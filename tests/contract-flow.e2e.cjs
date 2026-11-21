@@ -62,9 +62,13 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   const tpl = o.locator('textarea[aria-label="Contract template"]');
   let t = await tpl.inputValue();
   assert(t.includes('[RENTER NAME]') && t.includes('ABANDONED BELONGINGS') && t.includes('Article 1670'), 'default has blanks and protections');
-  t = t.replace('**[LESSOR NAME]**, of legal age, ____________ (civil status), Filipino, with residence address at ________________________________________',
-    '**[LESSOR NAME]**, of legal age, married, Filipino, with residence address at 51 Seattle Street, Cubao, Quezon City')
-    .replace('**5-day** grace period', '**3-day** grace period');
+  assert(t.includes('[LESSOR CIVIL STATUS], [LESSOR CITIZENSHIP], with residence address at [LESSOR ADDRESS]'), 'lessor blanks in default');
+  // Your details: saved once, filled into every contract
+  await o.fill('input[name=civilStatus]', 'married');
+  await o.fill('input[name=address]', '51 Seattle Street, Cubao, Quezon City');
+  await o.click('button:has-text("Save my details")');
+  await o.locator('text=Saved.').first().waitFor();
+  t = t.replace('**5-day** grace period', '**3-day** grace period');
   await tpl.fill(t);
   await o.click('button:has-text("Save my template")');
   await o.locator('text=Saved. Your next contracts will start from this template.').waitFor();
@@ -77,31 +81,50 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await o.goto(base + '/dashboard/applications');
   await o.click('a:has-text("Prepare contract")');
   await o.waitForURL(`**/applications/${appId}/contract/edit`);
-  const box = o.locator('textarea[aria-label="Contract text"]');
-  let body = await box.inputValue();
+  const fld = (label) => o.locator(`[aria-label="${label}"]`);
+  const prefilled = {
+    'Your full name': 'Josefa Santos', 'Your civil status': 'married', 'Your citizenship': 'Filipino',
+    'Your residence address': '51 Seattle Street, Cubao, Quezon City', "Renter's full name": 'Daisy Cruz',
+    "Renter's residence address": '12 Mango Ave, Cebu City', "Renter's ID type and number": "Driver's license N01-23-456789",
+    'Address of the unit': '2559 Isabel Street, Barangay 884, Manila, Metro Manila', 'Monthly rent (₱)': '11000',
+    'Security deposit (months)': '2', 'Maximum occupants': '3', 'Start of lease': '2026-12-07', 'Lease period (months)': '6',
+    'End of lease': '2027-06-06',
+  };
+  for (const [label, v] of Object.entries(prefilled)) assert(await fld(label).inputValue() === v, `prefilled ${label}: ${await fld(label).inputValue()}`);
+  assert((await fld('House rules').inputValue()).includes('No overnight visitors'), 'house rules prefilled');
+  assert(await o.locator('text=Not filled in yet').count() === 1 && (await o.textContent('form')).includes("Renter's civil status"), 'missing civil status flagged');
+  await fld("Renter's civil status").fill('single');
+  await fld('Address of the unit').fill('Unit 4B, 2559 Isabel Street, Barangay 884, Manila, Metro Manila');
+  // End date follows the lease period
+  await fld('Lease period (months)').fill('12');
+  assert(await fld('End of lease').inputValue() === '2027-12-06', 'end date recomputed');
+  await fld('Lease period (months)').fill('6');
+  assert(await o.locator('text=Not filled in yet').count() === 0, 'nothing missing');
+  const preview = await o.textContent('article');
   for (const s of [
-    'JOSEFA SANTOS**, of legal age, married, Filipino, with residence address at 51 Seattle Street',
-    'DAISY CRUZ**, of legal age', 'with residence address at 12 Mango Ave, Cebu City',
-    '2559 Isabel Street, Barangay 884, Manila, Metro Manila', 'SIX (6) MONTHS', 'DECEMBER 07, 2026 to JUNE 06, 2027',
-    'ELEVEN THOUSAND PESOS ONLY (₱11,000.00)', 'two (2)** month(s) rental in the total amount of **TWENTY-TWO THOUSAND PESOS ONLY (₱22,000.00)',
-    'THREE (3) OCCUPANT(S) ONLY', 'a. No overnight visitors without notice.', "Driver's license N01-23-456789", '**3-day** grace period',
-  ]) assert(body.includes(s), 'filled contract: ' + s);
-  assert(!/\[(RENTER NAME|RENT|START DATE|END DATE|PROPERTY ADDRESS)\]/.test(body), 'blanks filled');
-  // An edit for this renter only
-  await box.fill(body.replace('2559 Isabel Street', 'Unit 4B, 2559 Isabel Street'));
+    'JOSEFA SANTOS, of legal age, married, Filipino, with residence address at 51 Seattle Street',
+    'DAISY CRUZ, of legal age, single, Filipino, with residence address at 12 Mango Ave, Cebu City',
+    'Unit 4B, 2559 Isabel Street, Barangay 884', 'SIX (6) MONTHS', 'DECEMBER 07, 2026 to JUNE 06, 2027',
+    'ELEVEN THOUSAND PESOS ONLY (₱11,000.00)', 'two (2) month(s) rental in the total amount of TWENTY-TWO THOUSAND PESOS ONLY (₱22,000.00)',
+    'THREE (3) OCCUPANT(S) ONLY', 'a. No overnight visitors without notice.', "Driver's license N01-23-456789", '3-day grace period',
+  ]) assert(preview.includes(s), 'filled contract: ' + s);
+  assert(!/\[[A-Z ]+\]/.test(preview.replace('[PAGE BREAK]', '')), 'no blanks left in preview');
+  // Wording edit for this renter only
+  await o.click('button:has-text("Edit wording")');
+  const box = o.locator('textarea[aria-label="Contract wording"]');
+  await box.fill((await box.inputValue()).replace('**NOTICES.**', '**NOTICES AND COMMUNICATIONS.**'));
   await o.click('button:has-text("Preview")');
-  assert((await o.textContent('article')).includes('Unit 4B, 2559 Isabel Street'), 'preview shows edit');
   if (shots) await o.screenshot({ path: shots + '/contract-form.png', fullPage: true });
   await o.click('button:has-text("Save draft")');
   await o.waitForURL(`**/applications/${appId}/contract?saved=draft`);
   const doc = await o.textContent('article');
-  for (const s of ['CONTRACT OF LEASE', 'JOSEFA SANTOS', 'DAISY CRUZ', 'Unit 4B, 2559 Isabel Street', 'NO PETS POLICY', 'NOTARY PUBLIC'])
+  for (const s of ['CONTRACT OF LEASE', 'JOSEFA SANTOS', 'DAISY CRUZ', 'Unit 4B, 2559 Isabel Street', 'NO PETS POLICY', 'NOTARY PUBLIC', 'NOTICES AND COMMUNICATIONS'])
     assert(doc.includes(s), 'contract text: ' + s);
   assert(!doc.includes('**'), 'bold markers rendered');
   assert(await o.locator('article strong:has-text("CONTRACT OF LEASE")').count() === 1, 'bold title');
   // Template unchanged by the per-renter edit
   await o.goto(base + '/dashboard/contract-template');
-  assert(!(await tpl.inputValue()).includes('Unit 4B, 2559'), 'template untouched by contract edit');
+  assert(!(await tpl.inputValue()).includes('NOTICES AND COMMUNICATIONS'), 'template untouched by contract edit');
   await o.goto(base + `/applications/${appId}/contract`);
   log('draft saved, wording ok');
   const anon0 = await (await b.newContext(opts)).newPage();
@@ -115,7 +138,8 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
 
   // Owner sends it
   await o.click('text=Edit contract');
-  assert((await box.inputValue()).includes('Unit 4B, 2559 Isabel Street'), 'edit keeps saved contract');
+  assert(await fld('Address of the unit').inputValue() === 'Unit 4B, 2559 Isabel Street, Barangay 884, Manila, Metro Manila', 'edit keeps saved details');
+  assert((await o.textContent('article')).includes('NOTICES AND COMMUNICATIONS'), 'edit keeps saved wording');
   await o.click('button:has-text("Save and send to renter")');
   await o.waitForURL('**/contract?saved=sent-unpublished');
   assert(await o.locator('text=unpublished your listing').count() === 1, 'unpublish notice');
@@ -146,7 +170,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   // Owner changes rent after review → renter must review again
   await o.click('text=Edit contract');
   assert(await o.locator('button:has-text("Save draft")').count() === 0, 'no draft once sent');
-  await box.fill((await box.inputValue()).replace(/ELEVEN THOUSAND PESOS ONLY \(₱11,000\.00\)/g, 'ELEVEN THOUSAND FIVE HUNDRED PESOS ONLY (₱11,500.00)'));
+  await fld('Monthly rent (₱)').fill('11500');
   await o.click('button:has-text("Save and send update to renter")');
   await o.waitForURL('**/contract?saved=updated');
   assert((await o.textContent('article')).includes('ELEVEN THOUSAND FIVE HUNDRED PESOS ONLY'), 'updated rent');
@@ -158,7 +182,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await o.goto(base + '/dashboard/contract-template');
   await o.click('button:has-text("Reset to Oopa default")');
   await o.waitForURL('**/contract-template?reset=1');
-  assert((await tpl.inputValue()).includes('____________ (civil status)'), 'template reset to default');
+  assert((await tpl.inputValue()).includes('**5-day** grace period'), 'template reset to default');
   await o.goto(base + `/applications/${appId}/contract`);
   assert((await o.textContent('article')).includes('ELEVEN THOUSAND FIVE HUNDRED'), 'sent contract unchanged by reset');
   log('template reset ok');

@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { application } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 import ContractText from "@/components/ContractText";
+import { ContractFields, fillContract } from "@/lib/contract";
 import PrintButton from "@/components/PrintButton";
 import ReviewedButton from "@/components/ReviewedButton";
 
@@ -70,7 +71,7 @@ export default async function ContractView({ params, searchParams }: {
         )}
       </div>
 
-      <ContractText body={c.body} />
+      <ContractText body={fillContract(c.body, c.fields ? (ContractFields.safeParse(c.fields).data ?? null) : null)} />
     </main>
   );
 }

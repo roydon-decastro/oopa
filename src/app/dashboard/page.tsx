@@ -47,6 +47,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <h1 className="text-3xl font-bold">My listings</h1>
         <div className="flex gap-2">
           <Link href="/dashboard/applications" className="btn-outline">Applications</Link>
+          <Link href="/dashboard/contract-template" className="btn-outline">Contract template</Link>
           <Link href="/dashboard/buildings/new" className="btn-outline">+ Add a building</Link>
           <Link href="/dashboard/properties/new" className="btn">+ Add a property</Link>
         </div>

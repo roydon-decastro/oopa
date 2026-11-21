@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db } from "@/db";
 import { application, leaseContract, property, user as userTable } from "@/db/schema";
-import { ContractForm, contractFormFrom } from "@/lib/contract";
+import { MAX_CONTRACT_LENGTH } from "@/lib/contract";
 import { sendEmail } from "@/lib/email";
 import { requireOwner, requireUser } from "@/lib/session";
 
@@ -20,25 +20,24 @@ export async function saveContract(applicationId: string, _prev: ContractState, 
   if (!isId(applicationId)) return { error: "Application not found." };
   const row = await db.query.application.findFirst({
     where: eq(application.id, applicationId),
-    with: { property: { columns: { id: true, ownerId: true, title: true, status: true, bedsTotal: true, buildingId: true } }, renter: { columns: { email: true } }, contract: true },
+    with: {
+      property: { columns: { id: true, ownerId: true, title: true, status: true, bedsTotal: true, buildingId: true }, with: { owner: { columns: { name: true } } } },
+      renter: { columns: { email: true } }, contract: true,
+    },
   });
   if (!row || row.property.ownerId !== user.id) return { error: "Application not found." };
   if (row.status !== "approved") return { error: "Approve the lease application before preparing the contract." };
 
-  const parsed = ContractForm.safeParse(contractFormFrom(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const data = parsed.data;
+  const body = String(formData.get("body") ?? "").replace(/\r\n/g, "\n").trim();
+  if (body.length < 200) return { error: "The contract is empty or too short. Restore it from your template and try again." };
+  if (body.length > MAX_CONTRACT_LENGTH) return { error: "The contract is too long." };
   const send = formData.get("intent") === "send" || !!row.contract?.sentAt;
   const wasSent = !!row.contract?.sentAt;
 
   const now = new Date();
-  const values = { data, sentAt: send ? (row.contract?.sentAt ?? now) : null, reviewedAt: null };
+  const values = { body, sentAt: send ? (row.contract?.sentAt ?? now) : null, reviewedAt: null };
   if (row.contract) await db.update(leaseContract).set(values).where(eq(leaseContract.id, row.contract.id));
   else await db.insert(leaseContract).values({ ...values, applicationId });
-
-  // Remember the lessor's own details for their next contract.
-  const { civilStatus, citizenship, address, capacity, idType, idNumber } = data.lessor;
-  await db.update(userTable).set({ lessorDetails: { civilStatus, citizenship, address, capacity, idType, idNumber } }).where(eq(userTable.id, user.id));
 
   // Once the contract goes out, the place is spoken for: take the listing off the site (same as "Unpublish").
   // Per-bed rooms stay listed while beds are free; approving the renter already took their bed.
@@ -62,8 +61,8 @@ export async function saveContract(applicationId: string, _prev: ContractState, 
         heading: wasSent ? "The owner updated your lease contract" : "Your lease contract is ready to review",
         lines: [
           wasSent
-            ? `${data.lessor.name} made changes to the Contract of Lease for ${row.property.title}. Please read it again.`
-            : `${data.lessor.name} sent you the Contract of Lease for ${row.property.title}.`,
+            ? `${row.property.owner.name} made changes to the Contract of Lease for ${row.property.title}. Please read it again.`
+            : `${row.property.owner.name} sent you the Contract of Lease for ${row.property.title}.`,
           "Read it carefully and call the owner if you have questions. When you're happy with it, mark it as reviewed. You'll sign the printed copy together with two witnesses.",
         ],
         cta: { label: "Read the contract", path: `/applications/${applicationId}/contract` },
@@ -99,4 +98,24 @@ export async function markContractReviewed(applicationId: string) {
   revalidatePath(`/applications/${applicationId}/contract`);
   revalidatePath("/dashboard/applications");
   revalidatePath("/applications");
+}
+
+// ---------- The lessor's own template ----------
+
+export type TemplateState = { error?: string; saved?: boolean } | undefined;
+
+/** Saves the owner's contract template. "reset" goes back to Oopa's default. */
+export async function saveContractTemplate(_prev: TemplateState, formData: FormData): Promise<TemplateState> {
+  const { user } = await requireOwner("/dashboard/contract-template");
+  if (formData.get("intent") === "reset") {
+    await db.update(userTable).set({ contractTemplate: null }).where(eq(userTable.id, user.id));
+    revalidatePath("/dashboard/contract-template");
+    redirect("/dashboard/contract-template?reset=1");
+  }
+  const template = String(formData.get("template") ?? "").replace(/\r\n/g, "\n").trim();
+  if (template.length < 200) return { error: "Your template is empty or too short. Use Reset to Oopa default to start over." };
+  if (template.length > MAX_CONTRACT_LENGTH) return { error: "Your template is too long." };
+  await db.update(userTable).set({ contractTemplate: template }).where(eq(userTable.id, user.id));
+  revalidatePath("/dashboard/contract-template");
+  return { saved: true };
 }

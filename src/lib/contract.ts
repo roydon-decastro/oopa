@@ -1,105 +1,57 @@
-import { z } from "zod";
+// Contract of Lease: plain text, from the lessor's own template (or Oopa's default) with the
+// [BLANKS] filled in for one renter. The lessor can edit the filled-in text before sending it.
 
-// Contract of Lease, modelled on the owner's Word template. The owner fills in the highlighted
-// fields when preparing it; everything else is fixed wording (see ContractDocument).
+export const MAX_CONTRACT_LENGTH = 60_000;
 
-export const CIVIL_STATUS = ["single", "married", "widowed", "separated", "annulled"] as const;
+/** The blanks Oopa fills in, with what each becomes. Shown on the template page. */
+export const CONTRACT_BLANKS: [string, string][] = [
+  ["[LESSOR NAME]", "Your name"],
+  ["[RENTER NAME]", "The renter's full name from their lease application"],
+  ["[RENTER ADDRESS]", "The renter's address from their lease application"],
+  ["[RENTER ID]", "The renter's first ID type and number"],
+  ["[PROPERTY]", "The unit, e.g. Unit 4B of Casa Verde, or one (1) bed space in Room 201"],
+  ["[PROPERTY ADDRESS]", "The listing's address"],
+  ["[RENT]", "Monthly rent in words and figures"],
+  ["[ADVANCE MONTHS]", "Months of advance rent, e.g. one (1)"],
+  ["[ADVANCE]", "Advance rent in words and figures"],
+  ["[DEPOSIT MONTHS]", "Months of security deposit, e.g. two (2)"],
+  ["[DEPOSIT]", "Security deposit in words and figures"],
+  ["[LEASE MONTHS]", "Lease period, from the listing's minimum lease, e.g. SIX (6) MONTHS"],
+  ["[START DATE]", "Lease start from the renter's application"],
+  ["[END DATE]", "The day before the same date, [LEASE MONTHS] later"],
+  ["[MAX OCCUPANTS]", "Maximum tenants from the listing, e.g. THREE (3)"],
+  ["[HOUSE RULES]", "The listing's lease terms, one per line"],
+];
 
-export const CAPACITY = {
-  owner: "the owner",
-  coowner: "a co-owner and the appointed representative of the owners",
-  agent: "the duly authorized agent of the owner",
-} as const;
-export type Capacity = keyof typeof CAPACITY;
+export type ContractFacts = {
+  lessorName: string; renterName: string; renterAddress: string; renterId: string;
+  property: string; propertyAddress: string; rentPhp: number; advanceMonths: number; depositMonths: number;
+  leaseMonths: number; startDate: string; maxOccupants: number | null; houseRules: string | null;
+};
 
-const t = (max: number) => z.string().trim().max(max);
-const req = (max: number, msg: string) => z.string().trim().min(1, msg).max(max);
-const int = (min: number, max: number, label: string) =>
-  z.coerce.number({ message: `Enter ${label}.` }).int(`${label} must be a whole number.`).min(min, `${label} must be at least ${min}.`).max(max, `${label} can't be more than ${max}.`);
-
-/** The lessor's own details, remembered on their account for the next contract. */
-export const LessorDetails = z.object({
-  civilStatus: z.enum(CIVIL_STATUS, { message: "Choose your civil status." }),
-  citizenship: req(60, "Enter your citizenship."),
-  address: req(300, "Enter your residence address."),
-  capacity: z.enum(["owner", "coowner", "agent"]),
-  idType: t(60),
-  idNumber: t(60),
-});
-export type LessorDetailsData = z.infer<typeof LessorDetails>;
-
-export const ContractForm = z.object({
-  lessor: LessorDetails.extend({ name: req(120, "Enter your full name as lessor.") }),
-  lessee: z.object({
-    name: req(120, "Enter the lessee's full name."),
-    civilStatus: z.enum(CIVIL_STATUS, { message: "Choose the lessee's civil status." }),
-    citizenship: req(60, "Enter the lessee's citizenship."),
-    address: req(300, "Enter the lessee's residence address."),
-    idType: t(60),
-    idNumber: t(60),
-  }),
-  premises: req(300, "Describe the leased premises, e.g. Unit 4B of the five-storey residential building."),
-  address: req(300, "Enter the address of the leased premises."),
-  startDate: z.string().date("Choose the start date of the lease."),
-  months: int(1, 120, "Lease period (months)"),
-  rentPhp: z.coerce.number({ message: "Enter the monthly rent." }).positive("Enter the monthly rent.").max(10_000_000),
-  dueDay: int(1, 31, "Rent due day"),
-  graceDays: int(0, 60, "Grace period"),
-  penalty1: int(0, 100, "1st month penalty"),
-  penalty2: int(0, 100, "2nd month penalty"),
-  penalty3: int(0, 100, "Later months penalty"),
-  unpaidTerminateDays: int(1, 365, "Unpaid days before termination"),
-  depositMonths: int(0, 12, "Security deposit (months)"),
-  depositRefundDays: int(1, 365, "Deposit refund days"),
-  renewalMonths: int(1, 120, "Renewal period"),
-  renewalNoticeDays: int(1, 365, "Renewal notice days"),
-  ownerUseNoticeDays: int(1, 365, "Owner's own use notice days"),
-  idsWithinDays: int(1, 90, "Days to submit IDs"),
-  maxOccupants: int(1, 50, "Maximum occupants"),
-  noPets: z.boolean(),
-  noGasul: z.boolean(),
-  calamityRefundDays: int(1, 365, "Refund days after a calamity"),
-  violationNoticeDays: int(1, 365, "Notice days for violations"),
-  unpaidMonths: int(1, 12, "Unpaid months for violation"),
-  abandonDays: int(1, 365, "Days vacated without notice"),
-  preterminationNoticeDays: int(1, 365, "Pre-termination notice days"),
-  preterminationMonths: int(0, 12, "Pre-termination penalty (months)"),
-  preterminationRefundDays: int(1, 365, "Pre-termination refund days"),
-  otherRules: t(5000),
-  witness1: t(120),
-  witness2: t(120),
-});
-export type ContractData = z.infer<typeof ContractForm>;
-
-/** Values from the owner's template, used until the owner changes them. */
-export const CONTRACT_DEFAULTS = {
-  months: 6, dueDay: 7, graceDays: 5, penalty1: 5, penalty2: 10, penalty3: 20, unpaidTerminateDays: 30,
-  depositRefundDays: 30, renewalMonths: 6, renewalNoticeDays: 30, ownerUseNoticeDays: 60, idsWithinDays: 7,
-  noGasul: true, calamityRefundDays: 60, violationNoticeDays: 10, unpaidMonths: 1, abandonDays: 30,
-  preterminationNoticeDays: 30, preterminationMonths: 2, preterminationRefundDays: 30,
-} satisfies Partial<ContractData>;
-
-/** Turns the posted form into the shape ContractForm validates. */
-export function contractFormFrom(formData: FormData) {
-  const s = (k: string) => String(formData.get(k) ?? "");
-  const party = (p: string) => ({
-    name: s(`${p}.name`), civilStatus: s(`${p}.civilStatus`), citizenship: s(`${p}.citizenship`),
-    address: s(`${p}.address`), idType: s(`${p}.idType`), idNumber: s(`${p}.idNumber`),
-  });
-  const nums = [
-    "months", "rentPhp", "dueDay", "graceDays", "penalty1", "penalty2", "penalty3", "unpaidTerminateDays", "depositMonths",
-    "depositRefundDays", "renewalMonths", "renewalNoticeDays", "ownerUseNoticeDays", "idsWithinDays", "maxOccupants",
-    "calamityRefundDays", "violationNoticeDays", "unpaidMonths", "abandonDays", "preterminationNoticeDays",
-    "preterminationMonths", "preterminationRefundDays",
-  ] as const;
-  return {
-    lessor: { ...party("lessor"), capacity: s("lessor.capacity") },
-    lessee: party("lessee"),
-    premises: s("premises"), address: s("address"), startDate: s("startDate"),
-    ...Object.fromEntries(nums.map((k) => [k, s(k)])),
-    noPets: formData.get("noPets") === "on", noGasul: formData.get("noGasul") === "on",
-    otherRules: s("otherRules"), witness1: s("witness1"), witness2: s("witness2"),
+/** Fills the [BLANKS] in a template. Blanks without a value are left for the lessor to fill in by hand. */
+export function fillContract(template: string, f: ContractFacts): string {
+  const end = endDate(f.startDate, f.leaseMonths);
+  const rules = (f.houseRules ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const values: Record<string, string> = {
+    "[LESSOR NAME]": f.lessorName.toUpperCase(),
+    "[RENTER NAME]": f.renterName.toUpperCase(),
+    "[RENTER ADDRESS]": f.renterAddress,
+    "[RENTER ID]": f.renterId,
+    "[PROPERTY]": f.property,
+    "[PROPERTY ADDRESS]": f.propertyAddress,
+    "[RENT]": pesoWords(f.rentPhp),
+    "[ADVANCE MONTHS]": `${numberWords(f.advanceMonths)} (${f.advanceMonths})`,
+    "[ADVANCE]": pesoWords(f.rentPhp * f.advanceMonths),
+    "[DEPOSIT MONTHS]": `${numberWords(f.depositMonths)} (${f.depositMonths})`,
+    "[DEPOSIT]": pesoWords(f.rentPhp * f.depositMonths),
+    "[LEASE MONTHS]": counted(f.leaseMonths, "month").toUpperCase(),
+    "[START DATE]": longDate(f.startDate),
+    "[END DATE]": longDate(end),
+    "[MAX OCCUPANTS]": f.maxOccupants ? `${numberWords(f.maxOccupants).toUpperCase()} (${f.maxOccupants})` : "____",
+    "[HOUSE RULES]": rules.length ? rules.map((r, i) => `${String.fromCharCode(97 + (i % 26))}. ${r}`).join("\n") : "None, other than those stated in this contract.",
   };
+  return template.replace(/\[[A-Z ]+\]/g, (m) => (m in values && values[m] ? values[m] : m));
 }
 
 // ---------- Wording helpers ----------

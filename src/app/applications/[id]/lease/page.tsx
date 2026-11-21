@@ -10,6 +10,7 @@ import type { LeaseFormData, LeaseTerms } from "@/lib/lease";
 import { Covenants } from "@/components/LeaseApplicationForm";
 import DecisionButtons from "@/components/DecisionButtons";
 import PrintButton from "@/components/PrintButton";
+import PrintSheet from "@/components/PrintSheet";
 
 export const metadata = { title: "Lease application · Oopa", robots: { index: false, follow: false } };
 
@@ -59,6 +60,7 @@ export default async function LeaseView({ params, searchParams }: {
         </div>
       </div>
 
+      <PrintSheet>
       <div className="space-y-4 text-sm">
         <Band title="Property information">
           <Item label="Address" value={t.address} wide />
@@ -105,6 +107,7 @@ export default async function LeaseView({ params, searchParams }: {
           *This document shall be used for background check of potential tenants and shall form part of the Lease Agreement Contract.
         </p>
       </div>
+      </PrintSheet>
     </main>
   );
 }

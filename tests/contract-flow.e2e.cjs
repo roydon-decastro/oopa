@@ -126,6 +126,7 @@ const assert = (c, m) => { if (!c) throw new Error('ASSERT: ' + m); };
   await o.goto(base + '/dashboard/contract-template');
   assert(!(await tpl.inputValue()).includes('NOTICES AND COMMUNICATIONS'), 'template untouched by contract edit');
   await o.goto(base + `/applications/${appId}/contract`);
+  if (shots) await o.pdf({ path: shots + '/contract.pdf', preferCSSPageSize: true, format: 'A4' });
   log('draft saved, wording ok');
   const anon0 = await (await b.newContext(opts)).newPage();
   assert((await anon0.goto(base + '/listings/' + propertyId)).status() === 200, 'listing still live while contract is a draft');

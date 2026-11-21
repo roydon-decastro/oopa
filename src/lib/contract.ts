@@ -1,57 +1,118 @@
-// Contract of Lease: plain text, from the lessor's own template (or Oopa's default) with the
-// [BLANKS] filled in for one renter. The lessor can edit the filled-in text before sending it.
+import { z } from "zod";
+
+// Contract of Lease: plain text from the lessor's own template (or Oopa's default). The [BLANKS] in it are
+// filled from the contract details form, so the lessor never has to find and replace them by hand.
 
 export const MAX_CONTRACT_LENGTH = 60_000;
 
-/** The blanks Oopa fills in, with what each becomes. Shown on the template page. */
-export const CONTRACT_BLANKS: [string, string][] = [
-  ["[LESSOR NAME]", "Your name"],
-  ["[RENTER NAME]", "The renter's full name from their lease application"],
-  ["[RENTER ADDRESS]", "The renter's address from their lease application"],
-  ["[RENTER ID]", "The renter's first ID type and number"],
-  ["[PROPERTY]", "The unit, e.g. Unit 4B of Casa Verde, or one (1) bed space in Room 201"],
-  ["[PROPERTY ADDRESS]", "The listing's address"],
-  ["[RENT]", "Monthly rent in words and figures"],
-  ["[ADVANCE MONTHS]", "Months of advance rent, e.g. one (1)"],
-  ["[ADVANCE]", "Advance rent in words and figures"],
-  ["[DEPOSIT MONTHS]", "Months of security deposit, e.g. two (2)"],
-  ["[DEPOSIT]", "Security deposit in words and figures"],
-  ["[LEASE MONTHS]", "Lease period, from the listing's minimum lease, e.g. SIX (6) MONTHS"],
-  ["[START DATE]", "Lease start from the renter's application"],
-  ["[END DATE]", "The day before the same date, [LEASE MONTHS] later"],
-  ["[MAX OCCUPANTS]", "Maximum tenants from the listing, e.g. THREE (3)"],
-  ["[HOUSE RULES]", "The listing's lease terms, one per line"],
+/** The contract details form. Each field fills one or more [BLANKS] in the contract text. All values are as typed. */
+export const ContractFields = z.object({
+  lessorName: z.string().max(120),
+  lessorCivilStatus: z.string().max(40),
+  lessorCitizenship: z.string().max(60),
+  lessorAddress: z.string().max(300),
+  renterName: z.string().max(120),
+  renterCivilStatus: z.string().max(40),
+  renterCitizenship: z.string().max(60),
+  renterAddress: z.string().max(300),
+  renterId: z.string().max(120),
+  property: z.string().max(300),
+  propertyAddress: z.string().max(300),
+  rentPhp: z.string().max(20),
+  advanceMonths: z.string().max(3),
+  depositMonths: z.string().max(3),
+  leaseMonths: z.string().max(4),
+  startDate: z.string().max(10),
+  endDate: z.string().max(10),
+  maxOccupants: z.string().max(3),
+  houseRules: z.string().max(5000),
+});
+export type ContractFieldsData = z.infer<typeof ContractFields>;
+
+/** The lessor's own details, remembered from their last contract. */
+export const LessorProfile = z.object({
+  civilStatus: z.string().max(40).default(""),
+  citizenship: z.string().max(60).default(""),
+  address: z.string().max(300).default(""),
+});
+export type LessorProfileData = z.infer<typeof LessorProfile>;
+
+export const CIVIL_STATUS = ["single", "married", "widowed", "separated", "annulled"];
+
+/** Each blank, the form field that fills it, and the label shown on the form and the template page. */
+export const CONTRACT_BLANKS: { blank: string; field: keyof ContractFieldsData; label: string }[] = [
+  { blank: "[LESSOR NAME]", field: "lessorName", label: "Your full name" },
+  { blank: "[LESSOR CIVIL STATUS]", field: "lessorCivilStatus", label: "Your civil status" },
+  { blank: "[LESSOR CITIZENSHIP]", field: "lessorCitizenship", label: "Your citizenship" },
+  { blank: "[LESSOR ADDRESS]", field: "lessorAddress", label: "Your residence address" },
+  { blank: "[RENTER NAME]", field: "renterName", label: "Renter's full name" },
+  { blank: "[RENTER CIVIL STATUS]", field: "renterCivilStatus", label: "Renter's civil status" },
+  { blank: "[RENTER CITIZENSHIP]", field: "renterCitizenship", label: "Renter's citizenship" },
+  { blank: "[RENTER ADDRESS]", field: "renterAddress", label: "Renter's residence address" },
+  { blank: "[RENTER ID]", field: "renterId", label: "Renter's ID type and number" },
+  { blank: "[PROPERTY]", field: "property", label: "Unit being leased" },
+  { blank: "[PROPERTY ADDRESS]", field: "propertyAddress", label: "Address of the unit" },
+  { blank: "[RENT]", field: "rentPhp", label: "Monthly rent (₱)" },
+  { blank: "[ADVANCE MONTHS]", field: "advanceMonths", label: "Advance (months)" },
+  { blank: "[ADVANCE]", field: "advanceMonths", label: "Advance amount (from rent × months)" },
+  { blank: "[DEPOSIT MONTHS]", field: "depositMonths", label: "Security deposit (months)" },
+  { blank: "[DEPOSIT]", field: "depositMonths", label: "Deposit amount (from rent × months)" },
+  { blank: "[LEASE MONTHS]", field: "leaseMonths", label: "Lease period (months)" },
+  { blank: "[START DATE]", field: "startDate", label: "Start of lease" },
+  { blank: "[END DATE]", field: "endDate", label: "End of lease" },
+  { blank: "[MAX OCCUPANTS]", field: "maxOccupants", label: "Maximum occupants" },
+  { blank: "[HOUSE RULES]", field: "houseRules", label: "House rules (one per line)" },
 ];
 
-export type ContractFacts = {
-  lessorName: string; renterName: string; renterAddress: string; renterId: string;
-  property: string; propertyAddress: string; rentPhp: number; advanceMonths: number; depositMonths: number;
-  leaseMonths: number; startDate: string; maxOccupants: number | null; houseRules: string | null;
-};
+const num = (s: string) => (/^\d+(\.\d+)?$/.test(s.trim()) ? Number(s) : null);
+const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
 
-/** Fills the [BLANKS] in a template. Blanks without a value are left for the lessor to fill in by hand. */
-export function fillContract(template: string, f: ContractFacts): string {
-  const end = endDate(f.startDate, f.leaseMonths);
-  const rules = (f.houseRules ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
-  const values: Record<string, string> = {
-    "[LESSOR NAME]": f.lessorName.toUpperCase(),
-    "[RENTER NAME]": f.renterName.toUpperCase(),
-    "[RENTER ADDRESS]": f.renterAddress,
-    "[RENTER ID]": f.renterId,
-    "[PROPERTY]": f.property,
-    "[PROPERTY ADDRESS]": f.propertyAddress,
-    "[RENT]": pesoWords(f.rentPhp),
-    "[ADVANCE MONTHS]": `${numberWords(f.advanceMonths)} (${f.advanceMonths})`,
-    "[ADVANCE]": pesoWords(f.rentPhp * f.advanceMonths),
-    "[DEPOSIT MONTHS]": `${numberWords(f.depositMonths)} (${f.depositMonths})`,
-    "[DEPOSIT]": pesoWords(f.rentPhp * f.depositMonths),
-    "[LEASE MONTHS]": counted(f.leaseMonths, "month").toUpperCase(),
-    "[START DATE]": longDate(f.startDate),
-    "[END DATE]": longDate(end),
-    "[MAX OCCUPANTS]": f.maxOccupants ? `${numberWords(f.maxOccupants).toUpperCase()} (${f.maxOccupants})` : "____",
+/** What each blank becomes for these details. A blank whose details are missing maps to "". */
+export function blankValues(f: ContractFieldsData): Record<string, string> {
+  const rent = num(f.rentPhp);
+  const adv = num(f.advanceMonths);
+  const dep = num(f.depositMonths);
+  const lease = num(f.leaseMonths);
+  const occ = num(f.maxOccupants);
+  const words = (n: number | null) => (n == null ? "" : `${numberWords(n)} (${n})`);
+  const rules = f.houseRules.split("\n").map((l) => l.trim()).filter(Boolean);
+  return {
+    "[LESSOR NAME]": f.lessorName.trim().toUpperCase(),
+    "[LESSOR CIVIL STATUS]": f.lessorCivilStatus.trim(),
+    "[LESSOR CITIZENSHIP]": f.lessorCitizenship.trim(),
+    "[LESSOR ADDRESS]": f.lessorAddress.trim(),
+    "[RENTER NAME]": f.renterName.trim().toUpperCase(),
+    "[RENTER CIVIL STATUS]": f.renterCivilStatus.trim(),
+    "[RENTER CITIZENSHIP]": f.renterCitizenship.trim(),
+    "[RENTER ADDRESS]": f.renterAddress.trim(),
+    "[RENTER ID]": f.renterId.trim(),
+    "[PROPERTY]": f.property.trim(),
+    "[PROPERTY ADDRESS]": f.propertyAddress.trim(),
+    "[RENT]": rent ? pesoWords(rent) : "",
+    "[ADVANCE MONTHS]": words(adv),
+    "[ADVANCE]": rent && adv != null ? pesoWords(rent * adv) : "",
+    "[DEPOSIT MONTHS]": words(dep),
+    "[DEPOSIT]": rent && dep != null ? pesoWords(rent * dep) : "",
+    "[LEASE MONTHS]": lease ? counted(lease, "month").toUpperCase() : "",
+    "[START DATE]": isDate(f.startDate) ? longDate(f.startDate) : "",
+    "[END DATE]": isDate(f.endDate) ? longDate(f.endDate) : "",
+    "[MAX OCCUPANTS]": occ ? words(occ).toUpperCase() : "",
     "[HOUSE RULES]": rules.length ? rules.map((r, i) => `${String.fromCharCode(97 + (i % 26))}. ${r}`).join("\n") : "None, other than those stated in this contract.",
   };
-  return template.replace(/\[[A-Z ]+\]/g, (m) => (m in values && values[m] ? values[m] : m));
+}
+
+/** Fills the [BLANKS] in contract text. Blanks without details print as a line to write on by hand. */
+export function fillContract(text: string, f: ContractFieldsData | null): string {
+  if (!f) return text;
+  const values = blankValues(f);
+  return text.replace(/\[[A-Z ]+\]/g, (m) => (m in values ? values[m] || "____________________" : m));
+}
+
+/** Blanks used in the text whose details are still empty. */
+export function missingBlanks(text: string, f: ContractFieldsData): string[] {
+  const values = blankValues(f);
+  const used = new Set(text.match(/\[[A-Z ]+\]/g) ?? []);
+  return CONTRACT_BLANKS.filter((b) => used.has(b.blank) && !values[b.blank]).map((b) => b.label);
 }
 
 // ---------- Wording helpers ----------

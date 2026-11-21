@@ -50,6 +50,20 @@
       "when": 1794833250077,
       "tag": "0006_lease_contract",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795265896793,
+      "tag": "0007_drop_contract_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795265897609,
+      "tag": "0008_contract_text",
+      "breakpoints": true
     }
   ]
 }

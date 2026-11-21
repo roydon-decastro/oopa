@@ -4,8 +4,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { application } from "@/db/schema";
 import { requireUser } from "@/lib/session";
-import type { ContractData } from "@/lib/contract";
-import ContractDocument from "@/components/ContractDocument";
+import ContractText from "@/components/ContractText";
 import PrintButton from "@/components/PrintButton";
 import ReviewedButton from "@/components/ReviewedButton";
 
@@ -71,7 +70,7 @@ export default async function ContractView({ params, searchParams }: {
         )}
       </div>
 
-      <ContractDocument d={c.data as ContractData} />
+      <ContractText body={c.body} />
     </main>
   );
 }
